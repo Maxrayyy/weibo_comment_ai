@@ -116,6 +116,12 @@ class Config:
     def default_prompt_name(self):
         return self._config["default_prompt"]
 
+    def get_base_prompt(self):
+        prompt_data = self._prompts.get("weibo_base")
+        if not prompt_data:
+            raise ValueError("未找到 weibo_base prompt")
+        return prompt_data["system_prompt"]
+
     def get_prompt(self, name=None):
         """获取评论风格prompt，默认返回配置中指定的风格"""
         name = name or self.default_prompt_name
