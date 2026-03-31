@@ -11,11 +11,20 @@ import signal
 import sys
 import time
 
+from dotenv import load_dotenv
+load_dotenv()
+
+import os
+os.environ["WDM_LOCAL"] = "1"
+os.environ["WDM_SSL_VERIFY"] = "0"
+
 from src.utils.logger import logger
 from src.utils.config_loader import config
+from src.utils.rip_provider import get_rip
 from src.auth.login_manager import get_valid_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
 from src.scraper.weibo_scraper import WeiboScraper
+from src.scraper.api_fetcher import fetch_friends_weibos, fetch_followers
 from src.comment.ai_generator import generate_comment
 from src.comment.publisher import publish_comment
 from src.storage.record_store import record_store
@@ -26,14 +35,22 @@ class WeiboCommentBot:
     """微博自动评论机器人"""
 
     def __init__(self):
-        self.scraper = None
         self.my_uid = None
+        self.target_uids = []  # 要评论的目标用户UID列表
+        self.rip = None
 
     def init(self):
         """初始化：登录验证 + OAuth认证"""
         logger.info("=" * 50)
         logger.info("微博全自动评论系统启动")
         logger.info("=" * 50)
+
+        logger.info("[0/3] 获取本机公网IP（rip）...")
+        self.rip = get_rip()
+        if not self.rip:
+            logger.error("无法获取真实公网IP（rip），程序退出")
+            sys.exit(1)
+        logger.info(f"公网IP获取成功 ✓ (rip={self.rip})")
 
         # 1. Cookie登录验证
         logger.info("[1/3] 验证微博登录状态...")
@@ -52,11 +69,17 @@ class WeiboCommentBot:
         self.my_uid = get_uid(access_token)
         logger.info(f"OAuth认证通过 ✓ (UID: {self.my_uid})")
 
-        # 3. 初始化抓取器
-        logger.info("[3/3] 初始化微博抓取器...")
-        self.scraper = WeiboScraper()
-        self.scraper.start()
-        logger.info("抓取器初始化完成 ✓")
+        # 3. 确定目标用户列表
+        logger.info("[3/3] 确定好友圈目标用户...")
+        if config.whitelist:
+            # 优先使用白名单配置
+            self.target_uids = [str(uid) for uid in config.whitelist]
+            logger.info(f"使用白名单，共 {len(self.target_uids)} 个目标用户: {self.target_uids}")
+        else:
+            # 无白名单则从粉丝列表获取
+            followers = fetch_followers(self.my_uid)
+            self.target_uids = [f["uid"] for f in followers]
+            logger.info(f"从粉丝列表获取到 {len(self.target_uids)} 个目标用户")
 
         logger.info("=" * 50)
         logger.info("系统初始化完成，即将开始自动评论")
@@ -93,41 +116,27 @@ class WeiboCommentBot:
 
         except Exception as e:
             logger.error(f"轮询任务执行异常: {e}")
-            # 尝试重启抓取器
-            try:
-                logger.info("尝试重启抓取器...")
-                if self.scraper:
-                    self.scraper.stop()
-                self.scraper = WeiboScraper()
-                self.scraper.start()
-                logger.info("抓取器重启成功")
-            except Exception as restart_err:
-                logger.error(f"抓取器重启失败: {restart_err}")
 
     def _fetch_new_weibos(self):
-        """抓取并筛选新微博"""
-        all_weibos = []
+        """通过API抓取并筛选好友圈新微博"""
+        all_weibos = fetch_friends_weibos(count=70, page=2)
 
-        if config.strategy_mode == "whitelist" and config.whitelist:
-            # 白名单模式：逐个抓取白名单用户的微博
-            for uid in config.whitelist:
-                weibos = self.scraper.fetch_user_weibos(uid)
-                all_weibos.extend(weibos)
-        else:
-            # 黑名单模式或无白名单：抓取首页时间线
-            all_weibos = self.scraper.fetch_home_timeline()
+        logger.info(f"原始抓取到 {len(all_weibos)} 条微博")
 
-        # 过滤
+        # 过滤：只保留目标用户（好友圈）的微博
         new_weibos = []
         for weibo in all_weibos:
             mid = weibo.get("mid", "")
             if not mid:
                 continue
+            # 只保留目标用户的微博
+            if self.target_uids and weibo.get("user_id") not in self.target_uids:
+                continue
+            # 跳过自己的微博
+            if weibo.get("user_id") == self.my_uid:
+                continue
             # 跳过已评论的
             if record_store.is_commented(mid):
-                continue
-            # 黑名单过滤
-            if config.strategy_mode == "blacklist" and weibo.get("user_id") in [str(u) for u in config.blacklist]:
                 continue
             # 跳过转发微博（如果配置了）
             if config.skip_repost and weibo.get("is_repost"):
@@ -137,6 +146,7 @@ class WeiboCommentBot:
                 continue
             new_weibos.append(weibo)
 
+        logger.info(f"过滤后剩余 {len(new_weibos)} 条新微博待评论")
         return new_weibos
 
     def _comment_on_weibo(self, weibo):
@@ -160,7 +170,7 @@ class WeiboCommentBot:
         time.sleep(delay)
 
         # 发布评论
-        result = publish_comment(mid, comment)
+        result = publish_comment(mid, comment, self.rip)
         if result:
             record_store.add_record(mid, comment, user_name)
             logger.info(f"  ✓ 评论成功: {comment}")
@@ -169,8 +179,6 @@ class WeiboCommentBot:
 
     def cleanup(self):
         """清理资源"""
-        if self.scraper:
-            self.scraper.stop()
         logger.info("资源已清理")
 
 

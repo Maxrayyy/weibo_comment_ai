@@ -103,7 +103,6 @@ default_prompt: "friendly"    # friendly / thoughtful / brief
 
 ```bash
 source venv/bin/activate
-python main.py
 ```
 
 **首次运行：**

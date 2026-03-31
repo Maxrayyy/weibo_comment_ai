@@ -14,9 +14,13 @@ import time
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
 
 from src.utils.logger import logger
+
+CHROMEDRIVER_PATH = os.path.join(
+    os.path.expanduser("~"), ".wdm", "drivers", "chromedriver",
+    "win64", "146.0.7680.165", "chromedriver-win32", "chromedriver.exe"
+)
 
 COOKIE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -37,7 +41,7 @@ def _create_driver(headless=False):
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
-    service = Service(ChromeDriverManager().install())
+    service = Service(CHROMEDRIVER_PATH)
     driver = webdriver.Chrome(service=service, options=options)
     # 移除webdriver特征
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {

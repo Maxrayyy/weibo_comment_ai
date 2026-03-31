@@ -8,13 +8,20 @@ weibo:
 qwen:
   api_key: "${DASHSCOPE_API_KEY}"
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  model: "qwen-turbo"
+  model: "qwen2.5-7b-instruct"
   max_tokens: 150
-
 # 评论策略配置
 strategy:
   mode: "whitelist"               # whitelist 或 blacklist
-  whitelist: []                   # 白名单用户UID列表
+  # 白名单用户UID列表，UID获取方法：
+  # 打开用户微博主页，URL中 weibo.com/u/数字 即为UID
+  # 例: https://weibo.com/u/1234567890 → UID为 1234567890
+  # 白名单为空时自动从粉丝列表获取
+  whitelist:
+    - 5596465683
+    - 7764227545
+    - 7825404416
+    - 6468390483
   blacklist: []                   # 黑名单用户UID列表
   daily_limit: 50                 # 每日评论上限
   skip_repost: true               # 跳过转发微博
@@ -24,10 +31,10 @@ strategy:
 
 # 随机间隔配置（秒）
 timing:
-  poll_min: 300                   # 轮询最小间隔 5分钟
-  poll_max: 900                   # 轮询最大间隔 15分钟
-  comment_delay_min: 30           # 评论延迟最小 30秒
-  comment_delay_max: 180          # 评论延迟最大 3分钟
+  poll_min: 20                   # 轮询最小间隔 2分钟
+  poll_max: 50                   # 轮询最大间隔 5分钟
+  comment_delay_min: 5            # 评论延迟最小 5秒
+  comment_delay_max: 15           # 评论延迟最大 50秒
 
 # 默认评论风格
 default_prompt: "friendly"        # 引用prompts.yaml中的风格名

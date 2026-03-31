@@ -13,13 +13,14 @@ from src.utils.logger import logger
 COMMENT_CREATE_URL = "https://api.weibo.com/2/comments/create.json"
 
 
-def publish_comment(weibo_mid, comment_text):
+def publish_comment(weibo_mid, comment_text, rip):
     """
     通过微博API发布评论。
 
     参数：
         weibo_mid: 微博ID
         comment_text: 评论内容
+        rip: 用户真实有效ip
 
     返回：
         成功返回API响应dict，失败返回None
@@ -33,6 +34,7 @@ def publish_comment(weibo_mid, comment_text):
         "access_token": access_token,
         "id": weibo_mid,
         "comment": comment_text,
+        "rip": rip
     }
 
     try:
