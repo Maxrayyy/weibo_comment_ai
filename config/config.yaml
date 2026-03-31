@@ -1,0 +1,33 @@
+# 微博OAuth配置
+weibo:
+  app_key: "YOUR_APP_KEY"
+  app_secret: "YOUR_APP_SECRET"
+  redirect_uri: "https://api.weibo.com/oauth2/default.html"
+
+# Qwen大模型配置
+qwen:
+  api_key: "YOUR_QWEN_API_KEY"
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen-turbo"
+  max_tokens: 150
+
+# 评论策略配置
+strategy:
+  mode: "whitelist"               # whitelist 或 blacklist
+  whitelist: []                   # 白名单用户UID列表
+  blacklist: []                   # 黑名单用户UID列表
+  daily_limit: 50                 # 每日评论上限
+  skip_repost: true               # 跳过转发微博
+  work_hours:
+    start: 8                      # 工作开始时间
+    end: 23                       # 工作结束时间
+
+# 随机间隔配置（秒）
+timing:
+  poll_min: 300                   # 轮询最小间隔 5分钟
+  poll_max: 900                   # 轮询最大间隔 15分钟
+  comment_delay_min: 30           # 评论延迟最小 30秒
+  comment_delay_max: 180          # 评论延迟最大 3分钟
+
+# 默认评论风格
+default_prompt: "friendly"        # 引用prompts.yaml中的风格名
