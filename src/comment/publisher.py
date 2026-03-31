@@ -60,6 +60,9 @@ def publish_comment(weibo_mid, comment_text):
     except requests.Timeout:
         logger.error(f"评论发布超时，微博ID: {weibo_mid}")
         return None
+    except requests.ConnectionError:
+        logger.error(f"评论发布网络连接失败，微博ID: {weibo_mid}")
+        return None
     except Exception as e:
         logger.error(f"评论发布异常: {e}")
         return None

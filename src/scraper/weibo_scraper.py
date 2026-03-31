@@ -53,6 +53,34 @@ class WeiboScraper:
             self.driver = None
             logger.info("浏览器已关闭")
 
+    def _safe_get(self, url, retries=2):
+        """安全地加载页面，失败时自动重试"""
+        for attempt in range(retries + 1):
+            try:
+                self.driver.get(url)
+                time.sleep(3)
+                return True
+            except Exception as e:
+                logger.warning(f"页面加载失败 ({url})，第{attempt + 1}次: {e}")
+                if attempt < retries:
+                    time.sleep(5)
+                    self._restart_if_needed()
+                else:
+                    logger.error(f"页面加载最终失败: {url}")
+                    return False
+
+    def _restart_if_needed(self):
+        """检测浏览器状态，异常时自动重启"""
+        try:
+            _ = self.driver.current_url
+        except Exception:
+            logger.warning("浏览器连接丢失，正在重启...")
+            try:
+                self.driver.quit()
+            except Exception:
+                pass
+            self.start()
+
     def fetch_home_timeline(self, scroll_times=3):
         """
         抓取首页时间线上的微博。
@@ -60,13 +88,16 @@ class WeiboScraper:
         返回微博列表。
         """
         logger.info("正在抓取首页时间线...")
-        self.driver.get(WEIBO_HOME_URL)
-        time.sleep(3)
+        if not self._safe_get(WEIBO_HOME_URL):
+            return []
 
-        # 多次滚动加载更多内容
         for i in range(scroll_times):
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
+            try:
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(2)
+            except Exception as e:
+                logger.warning(f"滚动加载失败: {e}")
+                break
 
         page_source = self.driver.page_source
         weibos = parse_weibo_cards(page_source)
@@ -81,16 +112,19 @@ class WeiboScraper:
         """
         user_url = f"https://weibo.com/u/{uid}"
         logger.info(f"正在抓取用户 {uid} 的微博...")
-        self.driver.get(user_url)
-        time.sleep(3)
+        if not self._safe_get(user_url):
+            return []
 
         for i in range(scroll_times):
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
+            try:
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(2)
+            except Exception as e:
+                logger.warning(f"滚动加载失败: {e}")
+                break
 
         page_source = self.driver.page_source
         weibos = parse_weibo_cards(page_source)
-        # 标记来源用户
         for w in weibos:
             if not w.get("user_id"):
                 w["user_id"] = str(uid)
@@ -108,8 +142,9 @@ class WeiboScraper:
         for page in range(1, max_pages + 1):
             url = f"https://weibo.com/{uid}/follow?page={page}"
             logger.info(f"正在抓取关注列表第 {page} 页...")
-            self.driver.get(url)
-            time.sleep(3)
+            if not self._safe_get(url):
+                logger.warning(f"关注列表第 {page} 页加载失败，停止翻页")
+                break
 
             page_source = self.driver.page_source
             follows = parse_follow_list(page_source)

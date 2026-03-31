@@ -69,22 +69,40 @@ class WeiboCommentBot:
 
     def poll_and_comment(self):
         """一次完整的轮询和评论流程"""
-        # 1. 抓取新微博
-        weibos = self._fetch_new_weibos()
-        if not weibos:
-            logger.info("本次轮询没有发现新微博")
-            return
+        try:
+            # 1. 抓取新微博
+            weibos = self._fetch_new_weibos()
+            if not weibos:
+                logger.info("本次轮询没有发现新微博")
+                return
 
-        logger.info(f"发现 {len(weibos)} 条新微博待评论")
+            logger.info(f"发现 {len(weibos)} 条新微博待评论")
 
-        # 2. 逐条生成评论并发布
-        for weibo in weibos:
-            # 检查每日上限
-            if record_store.get_today_count() >= config.daily_limit:
-                logger.info("已达今日评论上限，停止评论")
-                break
+            # 2. 逐条生成评论并发布
+            for weibo in weibos:
+                # 检查每日上限
+                if record_store.get_today_count() >= config.daily_limit:
+                    logger.info("已达今日评论上限，停止评论")
+                    break
 
-            self._comment_on_weibo(weibo)
+                try:
+                    self._comment_on_weibo(weibo)
+                except Exception as e:
+                    logger.error(f"评论单条微博时出错 (mid={weibo.get('mid', '?')}): {e}")
+                    continue
+
+        except Exception as e:
+            logger.error(f"轮询任务执行异常: {e}")
+            # 尝试重启抓取器
+            try:
+                logger.info("尝试重启抓取器...")
+                if self.scraper:
+                    self.scraper.stop()
+                self.scraper = WeiboScraper()
+                self.scraper.start()
+                logger.info("抓取器重启成功")
+            except Exception as restart_err:
+                logger.error(f"抓取器重启失败: {restart_err}")
 
     def _fetch_new_weibos(self):
         """抓取并筛选新微博"""
@@ -172,8 +190,10 @@ def main():
         bot.init()
         scheduler = TaskScheduler(bot.poll_and_comment)
         scheduler.start()
+    except KeyboardInterrupt:
+        logger.info("用户手动退出")
     except Exception as e:
-        logger.error(f"程序异常退出: {e}")
+        logger.error(f"程序异常退出: {e}", exc_info=True)
     finally:
         bot.cleanup()
 
