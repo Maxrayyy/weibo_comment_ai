@@ -27,16 +27,36 @@ _style_variants = [
     "这次表示羡慕或者向往",
 ]
 
+_IDENTITY_VARIANTS = [
+    "你是刚刷到这条微博的路人",
+    "你是深夜刷微博的用户",
+    "你是在评论区潜水已久的人",
+    "你是看完忍不住想说一句的网友",
+    "你是刷到这条内容有点共鸣的人",
+]
 
 def _build_messages(weibo_text, prompt_name=None):
     """构建Qwen API的消息列表"""
-    system_prompt = config.get_prompt(prompt_name)
+    base_prompt = config.get_prompt("weibo_base")
+    style_prompt = config.get_prompt(prompt_name)
+
+    identity = random.choice(_IDENTITY_VARIANTS)
+
+    system_prompt = f"""
+    {base_prompt}
+
+    你的当前状态：
+    {identity}
+
+    {style_prompt}
+    """.strip()
 
     # 随机加入多样性修饰
-    variant = random.choice(_style_variants)
-    system_prompt += f"\n额外要求：{variant}。"
+    # variant = random.choice(_style_variants)
+    # system_prompt += f"\n额外要求：{variant}。"
 
-    user_prompt = f"请对以下微博内容生成一条自然的评论：\n\n{weibo_text}"
+    #user_prompt = f"请对以下微博内容生成一条自然的评论：\n\n{weibo_text}"
+    user_prompt = f"微博内容：\n{weibo_text}\n\n请直接给出评论，不要解释。"
 
     return [
         {"role": "system", "content": system_prompt},
