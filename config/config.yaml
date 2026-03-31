@@ -1,12 +1,12 @@
 # 微博OAuth配置
 weibo:
-  app_key: "YOUR_APP_KEY"
-  app_secret: "YOUR_APP_SECRET"
+  app_key: "${WEIBO_APP_KEY}"
+  app_secret: "${WEIBO_APP_SECRET}"
   redirect_uri: "https://api.weibo.com/oauth2/default.html"
 
 # Qwen大模型配置
 qwen:
-  api_key: "YOUR_QWEN_API_KEY"
+  api_key: "${DASHSCOPE_API_KEY}"
   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   model: "qwen-turbo"
   max_tokens: 150

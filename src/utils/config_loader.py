@@ -1,13 +1,31 @@
 import os
+import re
 import yaml
 
 CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config")
+
+_ENV_PATTERN = re.compile(r"\$\{(\w+)\}")
+
+
+def _resolve_env(value):
+    """递归解析配置值中的 ${ENV_VAR} 占位符"""
+    if isinstance(value, str):
+        match = _ENV_PATTERN.fullmatch(value)
+        if match:
+            return os.environ.get(match.group(1), value)
+        return _ENV_PATTERN.sub(lambda m: os.environ.get(m.group(1), m.group(0)), value)
+    if isinstance(value, dict):
+        return {k: _resolve_env(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_env(v) for v in value]
+    return value
 
 
 def _load_yaml(filename):
     filepath = os.path.join(CONFIG_DIR, filename)
     with open(filepath, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    return _resolve_env(data)
 
 
 class Config:
