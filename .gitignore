@@ -9,6 +9,7 @@ data/oauth_token.json
 data/commented_records.json
 .idea/
 .vscode/
+.claude/
 *.egg-info/
 dist/
 build/
