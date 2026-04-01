@@ -55,7 +55,7 @@ def _analyze_weibo(client, weibo_text):
     """
     try:
         response = client.chat.completions.create(
-            model=config.qwen_model,
+            model=config.analyze_model,
             messages=[
                 {"role": "system", "content": _ANALYZE_PROMPT},
                 {"role": "user", "content": weibo_text},
@@ -227,13 +227,20 @@ def generate_comment(weibo_text, prompt_name=None, max_retries=3):
     返回：
         评论文本字符串，失败返回None
     """
-    client = OpenAI(
-        api_key=config.qwen_api_key,
-        base_url=config.qwen_base_url,
+    # 分析阶段客户端（Qwen3.5-Flash）
+    analyze_client = OpenAI(
+        api_key=config.analyze_api_key,
+        base_url=config.analyze_base_url,
+    )
+
+    # 生成阶段客户端（Qwen3.5-Plus）
+    generate_client = OpenAI(
+        api_key=config.generate_api_key,
+        base_url=config.generate_base_url,
     )
 
     # 第一阶段：分析微博
-    analysis = _analyze_weibo(client, weibo_text)
+    analysis = _analyze_weibo(analyze_client, weibo_text)
     if analysis:
         logger.info(f"微博分析: 情绪={analysis.get('emotion')} 策略={analysis.get('strategy')} "
                      f"句式={analysis.get('style')} 话题={analysis.get('topic')}")
@@ -242,10 +249,10 @@ def generate_comment(weibo_text, prompt_name=None, max_retries=3):
     for attempt in range(max_retries):
         try:
             messages = _build_messages(weibo_text, analysis, prompt_name)
-            response = client.chat.completions.create(
-                model=config.qwen_model,
+            response = generate_client.chat.completions.create(
+                model=config.generate_model,
                 messages=messages,
-                max_tokens=config.qwen_max_tokens,
+                max_tokens=config.generate_max_tokens,
                 temperature=0.9,
             )
 

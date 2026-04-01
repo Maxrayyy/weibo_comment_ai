@@ -4,12 +4,19 @@ weibo:
   app_secret: "${WEIBO_APP_SECRET}"
   redirect_uri: "https://api.weibo.com/oauth2/default.html"
 
-# Qwen大模型配置
-qwen:
-  api_key: "${DASHSCOPE_API_KEY}"
-  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  model: "qwen2.5-7b-instruct"
-  max_tokens: 150
+# 大模型配置（兼容OpenAI SDK的任意平台）
+llm:
+  # 分析阶段（微博情绪/句式分析，低温度结构化输出）
+  analyze:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "qwen3.5-flash"
+  # 生成阶段（评论文本生成，高温度创意输出）
+  generate:
+    api_key: "${DASHSCOPE_API_KEY}"
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model: "qwen3.5-plus"
+    max_tokens: 150
 # 评论策略配置
 strategy:
   mode: "whitelist"               # whitelist 或 blacklist

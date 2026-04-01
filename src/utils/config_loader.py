@@ -48,22 +48,38 @@ class Config:
     def redirect_uri(self):
         return self._config["weibo"]["redirect_uri"]
 
-    # --- Qwen配置 ---
-    @property
-    def qwen_api_key(self):
-        return self._config["qwen"]["api_key"]
+    # --- LLM配置（分析阶段 + 生成阶段） ---
+    def _llm(self, stage):
+        """获取指定阶段的LLM配置"""
+        return self._config.get("llm", {}).get(stage, {})
 
     @property
-    def qwen_base_url(self):
-        return self._config["qwen"]["base_url"]
+    def analyze_api_key(self):
+        return self._llm("analyze").get("api_key", "")
 
     @property
-    def qwen_model(self):
-        return self._config["qwen"]["model"]
+    def analyze_base_url(self):
+        return self._llm("analyze").get("base_url", "")
 
     @property
-    def qwen_max_tokens(self):
-        return self._config["qwen"]["max_tokens"]
+    def analyze_model(self):
+        return self._llm("analyze").get("model", "")
+
+    @property
+    def generate_api_key(self):
+        return self._llm("generate").get("api_key", "")
+
+    @property
+    def generate_base_url(self):
+        return self._llm("generate").get("base_url", "")
+
+    @property
+    def generate_model(self):
+        return self._llm("generate").get("model", "")
+
+    @property
+    def generate_max_tokens(self):
+        return self._llm("generate").get("max_tokens", 150)
 
     # --- 策略配置 ---
     @property
