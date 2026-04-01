@@ -85,11 +85,16 @@ def _is_duplicate(comment):
     return False
 
 
+MIN_COMMENT_LENGTH = 12  # 评论最低字数
+
+
 def _validate_comment(comment):
     """验证评论内容是否合规"""
     if not comment or not comment.strip():
         return False
-    # 长度检查：不超过140字
+    # 长度检查
+    if len(comment) < MIN_COMMENT_LENGTH:
+        return False
     if len(comment) > 140:
         return False
     # 不应该包含明显的AI痕迹
