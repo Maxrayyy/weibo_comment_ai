@@ -17,16 +17,16 @@ _recent_comments = deque(maxlen=20)
 
 # 多样性修饰词，随机附加到prompt中
 _STYLE_VARIANTS = [
-    "这次直接表达感受，不要用语气词开头",
-    "这次用反问或感叹的方式回复",
-    "这次用比较简短的方式回复",
-    "这次稍微认真一点回复，不要用哈哈",
-    "这次表达一下共鸣或感同身受",
-    "这次可以开个小玩笑或调侃",
-    "这次表示羡慕或者向往",
-    "这次用接话的方式回复，像在对话",
-    "这次用吐槽的语气",
-    "这次用感叹号多一些，表达惊讶",
+    "直接说感受，像'好想…''受不了…''绝了'这样",
+    "用反问句，像'不是吧''谁懂啊''还有这种事？'",
+    "简短回复，五六个字就够",
+    "认真一点回复，像朋友之间的对话",
+    "表达共鸣，像'我也是''一模一样''被说中了'",
+    "调侃或开玩笑，带点损但不伤人",
+    "表达羡慕或向往，像'好羡慕''什么时候轮到我'",
+    "像在接对方的话往下说，像在聊天",
+    "吐槽，像'离谱''服了''无语'这种风格",
+    "用省略号或感叹号表达情绪，像'啊…''！！！'",
 ]
 
 _IDENTITY_VARIANTS = [
@@ -63,7 +63,10 @@ def _build_messages(weibo_text, prompt_name=None):
     if _recent_comments:
         recent = list(_recent_comments)[-5:]  # 最近5条
         avoid_text = "、".join(f'"{c[:8]}"' for c in recent)
-        user_prompt += f"\n\n注意：不要和这些已有评论风格雷同：{avoid_text}"
+        # 提取近期评论的开头字，显式要求避开
+        recent_starts = set(c[0] for c in recent if c)
+        avoid_starts = "".join(recent_starts)
+        user_prompt += f'\n\n注意：不要和这些已有评论风格雷同：{avoid_text}。不要用\u201c{avoid_starts}\u201d中的任何字开头。'
 
     return [
         {"role": "system", "content": system_prompt},
