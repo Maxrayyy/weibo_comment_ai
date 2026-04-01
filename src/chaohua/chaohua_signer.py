@@ -2,6 +2,7 @@
 超话签到模块
 
 遍历用户关注的超话，逐个执行签到。
+使用PC Cookie方案，无需手机抓包。
 """
 
 import random
@@ -42,21 +43,28 @@ class ChaohuaSigner:
 
         for topic in topics:
             name = topic["name"]
+            containerid = topic["containerid"]
             today = datetime.now().strftime("%Y-%m-%d")
 
-            # 检查是否已签到
-            if topic.get("is_signed") or record_store.is_chaohua_signed(name, today):
-                logger.info(f"  [{name}] 已签到，跳过")
+            # 检查本地记录是否已签到
+            if record_store.is_chaohua_signed(name, today):
+                logger.info(f"  [{name}] 本地记录已签到，跳过")
                 already_count += 1
                 continue
 
             # 执行签到
             logger.info(f"  [{name}] 正在签到...")
-            success = self.client.sign_in(topic.get("sign_url"))
-            if success:
+            result = self.client.sign_in(containerid)
+
+            if result is True:
                 record_store.add_chaohua_sign_record(name, today)
-                logger.info(f"  [{name}] 签到成功")
+                logger.info(f"  [{name}] 签到成功 ✓")
                 success_count += 1
+            elif result is None:
+                # 已签到（接口返回已签）
+                record_store.add_chaohua_sign_record(name, today)
+                logger.info(f"  [{name}] 已签到，跳过")
+                already_count += 1
             else:
                 logger.warning(f"  [{name}] 签到失败")
                 fail_count += 1

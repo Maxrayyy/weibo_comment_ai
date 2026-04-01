@@ -1,7 +1,8 @@
 """
 超话评论模块
 
-抓取超话feed中的微博并自动生成AI评论。
+抓取超话帖子并自动生成AI评论。
+使用PC Cookie方案 + OAuth评论API。
 """
 
 import random
@@ -25,7 +26,7 @@ class ChaohuaCommenter:
 
     def comment_on_topics(self):
         """
-        遍历目标超话，抓取feed并评论。
+        遍历目标超话，抓取帖子并评论。
         返回: 成功评论数
         """
         if not self.comment_config.get("enabled"):
@@ -33,19 +34,24 @@ class ChaohuaCommenter:
 
         target_topics = self.comment_config.get("target_topics", [])
         if not target_topics:
-            logger.info("未配置目标超话，跳过评论")
+            # 未配置则从关注的超话中获取
+            all_topics = self.client.get_followed_chaohua()
+            target_topics = [t["containerid"] for t in all_topics]
+
+        if not target_topics:
+            logger.info("没有可评论的超话")
             return 0
 
         daily_limit = self.comment_config.get("daily_limit", 20)
         total_success = 0
 
-        for topic_containerid in target_topics:
+        for containerid in target_topics:
             if record_store.get_chaohua_comment_today_count() >= daily_limit:
                 logger.info("超话评论已达今日上限")
                 break
 
-            logger.info(f"正在抓取超话 {topic_containerid} 的feed...")
-            weibos = self.client.get_chaohua_feed(topic_containerid)
+            logger.info(f"正在抓取超话 {containerid} 的帖子...")
+            weibos = self.client.get_topic_feed(containerid)
 
             for weibo in weibos:
                 if record_store.get_chaohua_comment_today_count() >= daily_limit:
@@ -56,25 +62,20 @@ class ChaohuaCommenter:
                 if not mid or not text:
                     continue
 
-                # 跳过已评论
                 if record_store.is_commented(mid):
                     continue
 
-                # 跳过转发
                 if config.skip_repost and weibo.get("is_repost"):
                     continue
 
-                # AI生成评论
                 comment = generate_comment(text)
                 if not comment:
                     continue
 
-                # 随机延迟
                 delay = random.randint(config.comment_delay_min, config.comment_delay_max)
-                logger.info(f"等待 {delay} 秒后评论超话微博 {mid}...")
+                logger.info(f"等待 {delay}s 后评论超话微博 {mid}...")
                 time.sleep(delay)
 
-                # 发布评论（使用OAuth API）
                 result = publish_comment(mid, comment, self.rip)
                 if result:
                     record_store.add_record(mid, comment, weibo.get("user_name", ""))

@@ -160,10 +160,6 @@ class Config:
         return self._config.get("chaohua", {}).get("enabled", False)
 
     @property
-    def chaohua_auth_url(self):
-        return self._config.get("chaohua", {}).get("auth_url", "")
-
-    @property
     def chaohua_sign_config(self):
         return self._config.get("chaohua", {}).get("sign", {})
 

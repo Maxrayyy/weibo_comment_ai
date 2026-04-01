@@ -2,13 +2,13 @@
 超话发帖模块
 
 在指定超话中自动发布内容。
+使用PC Cookie方案。
 """
 
 import random
 import time
 
 from src.chaohua.chaohua_client import ChaohuaClient
-from src.comment.ai_generator import generate_comment
 from src.storage.record_store import record_store
 from src.utils.config_loader import config
 from src.utils.logger import logger
@@ -31,25 +31,29 @@ class ChaohuaPoster:
 
         target_topics = self.post_config.get("target_topics", [])
         if not target_topics:
-            logger.info("未配置目标超话，跳过发帖")
+            # 如果未配置目标超话，则向所有关注的超话发帖
+            all_topics = self.client.get_followed_chaohua()
+            target_topics = [t["containerid"] for t in all_topics]
+
+        if not target_topics:
+            logger.info("没有可发帖的超话")
             return 0
 
         daily_limit = self.post_config.get("daily_limit", 5)
         templates = self.post_config.get("templates", ["打卡"])
         success_count = 0
 
-        for topic_id in target_topics:
+        for containerid in target_topics:
             if record_store.get_chaohua_post_today_count() >= daily_limit:
                 logger.info("超话发帖已达今日上限")
                 break
 
-            # 从模板中随机选取内容
             content = random.choice(templates)
-            logger.info(f"正在向超话 {topic_id} 发帖: {content}")
+            logger.info(f"正在向超话 {containerid} 发帖: {content}")
 
-            success = self.client.post_to_chaohua(content, extparam=topic_id)
+            success = self.client.post_to_topic(containerid, content)
             if success:
-                record_store.add_chaohua_post_record(topic_id, content)
+                record_store.add_chaohua_post_record(containerid, content)
                 success_count += 1
 
             time.sleep(random.uniform(3, 8))

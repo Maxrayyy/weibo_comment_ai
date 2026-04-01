@@ -48,12 +48,9 @@ friend_group:
   poll_min: 60                    # 轮询最小间隔（秒）
   poll_max: 120                   # 轮询最大间隔（秒）
 
-# 超话功能配置
+# 超话功能配置（基于PC Cookie，无需手机抓包）
 chaohua:
   enabled: false
-  # 认证参数URL（从手机抓包获取，包含gsid等参数）
-  # 获取方法：手机抓包微博App，搜索 api.weibo.cn/2/cardlist，复制完整URL
-  auth_url: "${WEIBO_CHAOHUA_AUTH_URL}"
 
   # 签到配置
   sign:
