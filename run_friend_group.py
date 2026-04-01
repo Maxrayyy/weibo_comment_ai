@@ -137,7 +137,7 @@ class FriendGroupBot:
 
         result = publish_comment(mid, comment, self.rip)
         if result:
-            record_store.add_record(mid, comment, user_name)
+            record_store.add_record(mid, comment, user_name, comment_id=result.get("id"))
             logger.info(f"  ✓ 评论成功")
         else:
             logger.warning(f"  ✗ 评论失败")

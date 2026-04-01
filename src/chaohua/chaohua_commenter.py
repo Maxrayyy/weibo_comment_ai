@@ -78,7 +78,7 @@ class ChaohuaCommenter:
 
                 result = publish_comment(mid, comment, self.rip)
                 if result:
-                    record_store.add_record(mid, comment, weibo.get("user_name", ""))
+                    record_store.add_record(mid, comment, weibo.get("user_name", ""), comment_id=result.get("id"))
                     record_store.increment_chaohua_comment_count()
                     total_success += 1
                     logger.info(f"超话评论成功 @{weibo.get('user_name', '?')}: {comment}")

@@ -58,15 +58,18 @@ class RecordStore:
         """检查某条微博是否已评论"""
         return str(mid) in self._records["commented"]
 
-    def add_record(self, mid, comment_text, user_name=""):
+    def add_record(self, mid, comment_text, user_name="", comment_id=None):
         """添加一条评论记录"""
         mid = str(mid)
         today = datetime.now().strftime("%Y-%m-%d")
-        self._records["commented"][mid] = {
+        record = {
             "comment": comment_text,
             "user_name": user_name,
             "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
+        if comment_id:
+            record["cid"] = str(comment_id)
+        self._records["commented"][mid] = record
         # 更新每日计数
         self._records.setdefault("daily_counts", {})
         self._records["daily_counts"][today] = self._records["daily_counts"].get(today, 0) + 1
