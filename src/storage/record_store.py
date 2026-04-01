@@ -23,18 +23,30 @@ class RecordStore:
     def __init__(self):
         self._records = self._load()
 
+    _DEFAULT_RECORDS = {
+        "commented": {},
+        "daily_counts": {},
+        "chaohua_signed": {},
+        "chaohua_posted": {},
+        "chaohua_comment_counts": {},
+        "chaohua_post_counts": {},
+    }
+
     def _load(self):
         """从文件加载记录"""
         if not os.path.exists(RECORD_PATH):
-            return {"commented": {}, "daily_counts": {}}
+            return dict(self._DEFAULT_RECORDS)
         try:
             with open(RECORD_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            # 确保所有key都存在（兼容旧数据）
+            for key, default in self._DEFAULT_RECORDS.items():
+                data.setdefault(key, default)
             logger.info(f"已加载 {len(data.get('commented', {}))} 条评论记录")
             return data
         except Exception as e:
             logger.error(f"加载评论记录失败: {e}")
-            return {"commented": {}, "daily_counts": {}}
+            return dict(self._DEFAULT_RECORDS)
 
     def _save(self):
         """保存记录到文件"""
@@ -69,6 +81,48 @@ class RecordStore:
     def get_total_count(self):
         """获取总评论数"""
         return len(self._records.get("commented", {}))
+
+    # --- 超话签到记录 ---
+    def is_chaohua_signed(self, topic_name, date=None):
+        """检查某超话今日是否已签到"""
+        date = date or datetime.now().strftime("%Y-%m-%d")
+        signed = self._records.get("chaohua_signed", {}).get(date, [])
+        return topic_name in signed
+
+    def add_chaohua_sign_record(self, topic_name, date=None):
+        """记录超话签到"""
+        date = date or datetime.now().strftime("%Y-%m-%d")
+        self._records.setdefault("chaohua_signed", {})
+        self._records["chaohua_signed"].setdefault(date, [])
+        if topic_name not in self._records["chaohua_signed"][date]:
+            self._records["chaohua_signed"][date].append(topic_name)
+        self._save()
+
+    # --- 超话发帖记录 ---
+    def add_chaohua_post_record(self, topic_id, content):
+        """记录超话发帖"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        self._records.setdefault("chaohua_post_counts", {})
+        self._records["chaohua_post_counts"][today] = self._records["chaohua_post_counts"].get(today, 0) + 1
+        self._save()
+
+    def get_chaohua_post_today_count(self):
+        """获取今日超话发帖数"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        return self._records.get("chaohua_post_counts", {}).get(today, 0)
+
+    # --- 超话评论计数 ---
+    def increment_chaohua_comment_count(self):
+        """增加今日超话评论计数"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        self._records.setdefault("chaohua_comment_counts", {})
+        self._records["chaohua_comment_counts"][today] = self._records["chaohua_comment_counts"].get(today, 0) + 1
+        self._save()
+
+    def get_chaohua_comment_today_count(self):
+        """获取今日超话评论数"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        return self._records.get("chaohua_comment_counts", {}).get(today, 0)
 
 
 record_store = RecordStore()

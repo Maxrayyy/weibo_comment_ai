@@ -14,6 +14,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+import random
+
 from src.auth.login_manager import apply_cookies, load_cookies, WEIBO_HOME_URL
 from src.scraper.parser import parse_weibo_cards, parse_follow_list
 from src.utils.logger import logger
@@ -167,6 +169,42 @@ class WeiboScraper:
 
         logger.info(f"共抓取到 {len(all_follows)} 个关注用户")
         return all_follows
+
+    def fetch_group_timeline(self, gid, scroll_times=3):
+        """
+        抓取好友圈分组的微博feed。
+        gid: 好友圈分组ID（URL中的gid参数）
+        scroll_times: 向下滚动的次数
+        返回微博列表。
+        """
+        url = f"https://www.weibo.com/mygroups?gid={gid}"
+        logger.info(f"正在抓取好友圈 (gid={gid})...")
+        if not self._safe_get(url):
+            return []
+
+        # 等待SPA页面渲染
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "[action-type='feed_list_item'], .wbpro-feed, .card-wrap, [mid]"))
+            )
+        except Exception:
+            logger.warning("好友圈页面加载超时，尝试继续解析...")
+
+        # 滚动加载更多内容
+        for i in range(scroll_times):
+            try:
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(random.uniform(1.5, 3.0))
+            except Exception as e:
+                logger.warning(f"滚动加载失败: {e}")
+                break
+
+        page_source = self.driver.page_source
+        weibos = parse_weibo_cards(page_source)
+        logger.info(f"好友圈抓取到 {len(weibos)} 条微博")
+        for w in weibos:
+            logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
+        return weibos
 
     def fetch_mutual_follows(self, uid, max_pages=5):
         """

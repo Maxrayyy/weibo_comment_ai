@@ -39,3 +39,42 @@ timing:
 # 评论风格（引用prompts.yaml中的key）
 base_prompt: "weibo_base"         # 底座prompt
 default_prompt: "friendly"        # 默认评论风格
+
+# 好友圈评论配置
+friend_group:
+  enabled: true
+  gid: "100097764254452"          # 好友圈分组ID（URL中的gid参数）
+  scroll_times: 3                 # 页面滚动次数
+  poll_min: 60                    # 轮询最小间隔（秒）
+  poll_max: 120                   # 轮询最大间隔（秒）
+
+# 超话功能配置
+chaohua:
+  enabled: false
+  # 认证参数URL（从手机抓包获取，包含gsid等参数）
+  # 获取方法：手机抓包微博App，搜索 api.weibo.cn/2/cardlist，复制完整URL
+  auth_url: "${WEIBO_CHAOHUA_AUTH_URL}"
+
+  # 签到配置
+  sign:
+    enabled: true
+    schedule: "08:00"             # 每日签到时间
+    delay_min: 5                  # 签到间隔最小秒数
+    delay_max: 10                 # 签到间隔最大秒数
+
+  # 发帖配置
+  post:
+    enabled: false                # 默认关闭，需手动开启
+    target_topics: []             # 目标超话containerid列表
+    daily_limit: 5
+    templates:                    # 发帖模板（随机选取）
+      - "打卡"
+      - "签到"
+
+  # 超话评论配置
+  comment:
+    enabled: false
+    target_topics: []             # 目标超话containerid列表
+    daily_limit: 20
+    poll_min: 120                 # 轮询最小间隔（秒）
+    poll_max: 300                 # 轮询最大间隔（秒）

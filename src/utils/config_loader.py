@@ -133,5 +133,47 @@ class Config:
         return {k: v["name"] for k, v in self._prompts.items()
                 if isinstance(v, dict) and "name" in v}
 
+    # --- 好友圈配置 ---
+    @property
+    def friend_group_enabled(self):
+        return self._config.get("friend_group", {}).get("enabled", False)
+
+    @property
+    def friend_group_gid(self):
+        return self._config.get("friend_group", {}).get("gid", "")
+
+    @property
+    def friend_group_scroll_times(self):
+        return self._config.get("friend_group", {}).get("scroll_times", 3)
+
+    @property
+    def friend_group_poll_min(self):
+        return self._config.get("friend_group", {}).get("poll_min", 60)
+
+    @property
+    def friend_group_poll_max(self):
+        return self._config.get("friend_group", {}).get("poll_max", 120)
+
+    # --- 超话配置 ---
+    @property
+    def chaohua_enabled(self):
+        return self._config.get("chaohua", {}).get("enabled", False)
+
+    @property
+    def chaohua_auth_url(self):
+        return self._config.get("chaohua", {}).get("auth_url", "")
+
+    @property
+    def chaohua_sign_config(self):
+        return self._config.get("chaohua", {}).get("sign", {})
+
+    @property
+    def chaohua_post_config(self):
+        return self._config.get("chaohua", {}).get("post", {})
+
+    @property
+    def chaohua_comment_config(self):
+        return self._config.get("chaohua", {}).get("comment", {})
+
 
 config = Config()

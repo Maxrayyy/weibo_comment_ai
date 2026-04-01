@@ -1,9 +1,13 @@
 """
 微博全自动评论系统 — 主程序入口
 
-整合所有模块，实现完整的自动评论工作流：
+整合所有模块，实现完整的自动化工作流：
 1. 加载配置 → 2. 登录验证 → 3. OAuth认证 → 4. 启动调度器
-调度器循环：抓取新微博 → AI生成评论 → 随机延迟 → API发布评论
+
+功能：
+- 首页feed自动评论（API方式）
+- 好友圈分组页面抓取 + 自动评论（Selenium方式）
+- 超话签到、发帖、评论（移动端API方式）
 """
 
 import random
@@ -38,6 +42,8 @@ class WeiboCommentBot:
         self.my_uid = None
         self.target_uids = []  # 要评论的目标用户UID列表
         self.rip = None
+        self.scraper = None    # Selenium抓取器（好友圈用）
+        self.chaohua_client = None
 
     def init(self):
         """初始化：登录验证 + OAuth认证"""
@@ -72,28 +78,46 @@ class WeiboCommentBot:
         # 3. 确定目标用户列表
         logger.info("[3/3] 确定好友圈目标用户...")
         if config.whitelist:
-            # 优先使用白名单配置
             self.target_uids = [str(uid) for uid in config.whitelist]
             logger.info(f"使用白名单，共 {len(self.target_uids)} 个目标用户: {self.target_uids}")
         else:
-            # 无白名单则从粉丝列表获取
             followers = fetch_followers(self.my_uid)
             self.target_uids = [f["uid"] for f in followers]
             logger.info(f"从粉丝列表获取到 {len(self.target_uids)} 个目标用户")
 
+        # 4. 初始化好友圈Selenium抓取器（如果启用）
+        if config.friend_group_enabled:
+            logger.info("初始化好友圈Selenium抓取器...")
+            self.scraper = WeiboScraper()
+            self.scraper.start()
+            logger.info("好友圈抓取器初始化完成 ✓")
+
+        # 5. 初始化超话客户端（如果启用）
+        if config.chaohua_enabled:
+            auth_url = config.chaohua_auth_url
+            if auth_url and not auth_url.startswith("${"):
+                from src.chaohua.chaohua_client import ChaohuaClient
+                self.chaohua_client = ChaohuaClient(auth_url)
+                logger.info("超话客户端初始化完成 ✓")
+            else:
+                logger.warning("超话功能已启用但未配置auth_url，请设置WEIBO_CHAOHUA_AUTH_URL环境变量")
+
         logger.info("=" * 50)
-        logger.info("系统初始化完成，即将开始自动评论")
+        logger.info("系统初始化完成，即将开始自动化任务")
         logger.info(f"  模式: {config.strategy_mode}")
         logger.info(f"  每日上限: {config.daily_limit} 条")
         logger.info(f"  工作时段: {config.work_hour_start}:00 - {config.work_hour_end}:00")
         logger.info(f"  轮询间隔: {config.poll_min}~{config.poll_max} 秒")
         logger.info(f"  评论风格: {config.default_prompt_name}")
+        logger.info(f"  好友圈评论: {'启用' if config.friend_group_enabled else '关闭'}")
+        logger.info(f"  超话功能: {'启用' if self.chaohua_client else '关闭'}")
         logger.info("=" * 50)
+
+    # ========== 首页feed评论（原有功能） ==========
 
     def poll_and_comment(self):
         """一次完整的轮询和评论流程"""
         try:
-            # 1. 抓取新微博
             weibos = self._fetch_new_weibos()
             if not weibos:
                 logger.info("本次轮询没有发现新微博")
@@ -101,13 +125,10 @@ class WeiboCommentBot:
 
             logger.info(f"发现 {len(weibos)} 条新微博待评论")
 
-            # 2. 逐条生成评论并发布
             for weibo in weibos:
-                # 检查每日上限
                 if record_store.get_today_count() >= config.daily_limit:
                     logger.info("已达今日评论上限，停止评论")
                     break
-
                 try:
                     self._comment_on_weibo(weibo)
                 except Exception as e:
@@ -123,25 +144,19 @@ class WeiboCommentBot:
 
         logger.info(f"原始抓取到 {len(all_weibos)} 条微博")
 
-        # 过滤：只保留目标用户（好友圈）的微博
         new_weibos = []
         for weibo in all_weibos:
             mid = weibo.get("mid", "")
             if not mid:
                 continue
-            # 只保留目标用户的微博
             if self.target_uids and weibo.get("user_id") not in self.target_uids:
                 continue
-            # 跳过自己的微博
             if weibo.get("user_id") == self.my_uid:
                 continue
-            # 跳过已评论的
             if record_store.is_commented(mid):
                 continue
-            # 跳过转发微博（如果配置了）
             if config.skip_repost and weibo.get("is_repost"):
                 continue
-            # 跳过内容为空的
             if not weibo.get("text", "").strip():
                 continue
             new_weibos.append(weibo)
@@ -158,18 +173,15 @@ class WeiboCommentBot:
         logger.info(f"正在评论 @{user_name} 的微博 (ID: {mid})")
         logger.info(f"  微博内容: {text[:80]}{'...' if len(text) > 80 else ''}")
 
-        # 生成评论
         comment = generate_comment(text)
         if not comment:
             logger.warning(f"评论生成失败，跳过微博 {mid}")
             return
 
-        # 随机延迟，模拟真人
         delay = random.randint(config.comment_delay_min, config.comment_delay_max)
         logger.info(f"  等待 {delay} 秒后发布评论...")
         time.sleep(delay)
 
-        # 发布评论
         result = publish_comment(mid, comment, self.rip)
         if result:
             record_store.add_record(mid, comment, user_name)
@@ -177,8 +189,81 @@ class WeiboCommentBot:
         else:
             logger.warning(f"  ✗ 评论发布失败")
 
+    # ========== 好友圈分组评论（新功能） ==========
+
+    def poll_friend_group(self):
+        """抓取好友圈分组页面并评论"""
+        if not self.scraper:
+            return
+
+        try:
+            gid = config.friend_group_gid
+            scroll_times = config.friend_group_scroll_times
+            weibos = self.scraper.fetch_group_timeline(gid, scroll_times)
+
+            if not weibos:
+                logger.info("[好友圈] 本次轮询没有发现新微博")
+                return
+
+            # 过滤
+            new_weibos = []
+            for weibo in weibos:
+                mid = weibo.get("mid", "")
+                if not mid or record_store.is_commented(mid):
+                    continue
+                if weibo.get("user_id") == self.my_uid:
+                    continue
+                if config.skip_repost and weibo.get("is_repost"):
+                    continue
+                if not weibo.get("text", "").strip():
+                    continue
+                new_weibos.append(weibo)
+
+            logger.info(f"[好友圈] 发现 {len(new_weibos)} 条新微博待评论")
+
+            for weibo in new_weibos:
+                if record_store.get_today_count() >= config.daily_limit:
+                    logger.info("[好友圈] 已达今日评论上限")
+                    break
+                try:
+                    self._comment_on_weibo(weibo)
+                except Exception as e:
+                    logger.error(f"[好友圈] 评论出错 (mid={weibo.get('mid', '?')}): {e}")
+                    continue
+
+        except Exception as e:
+            logger.error(f"[好友圈] 轮询异常: {e}")
+
+    # ========== 超话功能 ==========
+
+    def chaohua_sign(self):
+        """超话签到"""
+        if not self.chaohua_client:
+            return
+        from src.chaohua.chaohua_signer import ChaohuaSigner
+        signer = ChaohuaSigner(self.chaohua_client)
+        signer.sign_all()
+
+    def chaohua_post(self):
+        """超话发帖"""
+        if not self.chaohua_client:
+            return
+        from src.chaohua.chaohua_poster import ChaohuaPoster
+        poster = ChaohuaPoster(self.chaohua_client)
+        poster.post_to_topics()
+
+    def chaohua_comment(self):
+        """超话评论"""
+        if not self.chaohua_client:
+            return
+        from src.chaohua.chaohua_commenter import ChaohuaCommenter
+        commenter = ChaohuaCommenter(self.chaohua_client, self.rip)
+        commenter.comment_on_topics()
+
     def cleanup(self):
         """清理资源"""
+        if self.scraper:
+            self.scraper.stop()
         logger.info("资源已清理")
 
 
@@ -197,6 +282,38 @@ def main():
     try:
         bot.init()
         scheduler = TaskScheduler(bot.poll_and_comment)
+
+        # 注册好友圈轮询任务
+        if config.friend_group_enabled:
+            scheduler.add_interval_task(
+                "friend_group",
+                bot.poll_friend_group,
+                config.friend_group_poll_min,
+                config.friend_group_poll_max,
+            )
+
+        # 注册超话任务
+        if bot.chaohua_client:
+            sign_config = config.chaohua_sign_config
+            if sign_config.get("enabled"):
+                schedule_time = sign_config.get("schedule", "08:00")
+                scheduler.add_daily_task("chaohua_sign", bot.chaohua_sign, schedule_time)
+                # 启动时也立即执行一次签到
+                bot.chaohua_sign()
+
+            post_config = config.chaohua_post_config
+            if post_config.get("enabled"):
+                scheduler.add_daily_task("chaohua_post", bot.chaohua_post, "09:00")
+
+            comment_config = config.chaohua_comment_config
+            if comment_config.get("enabled"):
+                scheduler.add_interval_task(
+                    "chaohua_comment",
+                    bot.chaohua_comment,
+                    comment_config.get("poll_min", 120),
+                    comment_config.get("poll_max", 300),
+                )
+
         scheduler.start()
     except KeyboardInterrupt:
         logger.info("用户手动退出")

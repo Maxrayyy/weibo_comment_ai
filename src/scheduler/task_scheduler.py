@@ -1,7 +1,7 @@
 """
-随机间隔任务调度器
+多任务调度器
 
-基于APScheduler实现随机间隔的微博抓取和评论任务。
+基于APScheduler实现随机间隔和定时任务调度。
 支持工作时段控制和每日评论上限检查。
 """
 
@@ -11,6 +11,7 @@ from datetime import datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.cron import CronTrigger
 
 from src.utils.config_loader import config
 from src.utils.logger import logger
@@ -18,16 +19,18 @@ from src.storage.record_store import record_store
 
 
 class TaskScheduler:
-    """随机间隔任务调度器"""
+    """多任务调度器"""
 
     def __init__(self, task_func):
         """
+        向后兼容：单任务模式。
         参数：
             task_func: 每次轮询要执行的任务函数（无参数）
         """
         self.scheduler = BlockingScheduler()
         self.task_func = task_func
         self._running = True
+        self._interval_tasks = {}  # name -> {func, poll_min, poll_max}
 
     def _is_work_hours(self):
         """检查当前是否在工作时段内"""
@@ -42,24 +45,32 @@ class TaskScheduler:
             return True
         return False
 
-    def _schedule_next(self):
+    def _schedule_next(self, task_name="default"):
         """安排下一次任务执行"""
         if not self._running:
             return
 
-        delay = random.randint(config.poll_min, config.poll_max)
+        if task_name == "default":
+            poll_min = config.poll_min
+            poll_max = config.poll_max
+        else:
+            task_info = self._interval_tasks.get(task_name, {})
+            poll_min = task_info.get("poll_min", config.poll_min)
+            poll_max = task_info.get("poll_max", config.poll_max)
+
+        delay = random.randint(poll_min, poll_max)
         next_time = datetime.fromtimestamp(time.time() + delay)
-        logger.info(f"下一次轮询将在 {delay} 秒后 ({next_time.strftime('%H:%M:%S')}) 执行")
+        logger.info(f"[{task_name}] 下一次轮询将在 {delay} 秒后 ({next_time.strftime('%H:%M:%S')}) 执行")
 
         self.scheduler.add_job(
-            self._run_task,
+            self._run_task if task_name == "default" else lambda: self._run_interval_task(task_name),
             trigger=DateTrigger(run_date=next_time),
-            id="next_poll",
+            id=f"next_{task_name}",
             replace_existing=True,
         )
 
     def _run_task(self):
-        """执行一次轮询任务"""
+        """执行一次主轮询任务"""
         if not self._is_work_hours():
             logger.info(f"当前不在工作时段 ({config.work_hour_start}:00-{config.work_hour_end}:00)，跳过本次轮询")
             self._schedule_next()
@@ -79,15 +90,74 @@ class TaskScheduler:
         finally:
             self._schedule_next()
 
+    def add_interval_task(self, name, func, poll_min, poll_max):
+        """
+        添加随机间隔轮询任务。
+        name: 任务名称
+        func: 任务函数（无参数）
+        poll_min/poll_max: 轮询间隔范围（秒）
+        """
+        self._interval_tasks[name] = {
+            "func": func,
+            "poll_min": poll_min,
+            "poll_max": poll_max,
+        }
+
+    def _run_interval_task(self, task_name):
+        """执行一次间隔任务"""
+        if not self._is_work_hours():
+            logger.info(f"[{task_name}] 当前不在工作时段，跳过")
+            self._schedule_next(task_name)
+            return
+
+        task_info = self._interval_tasks.get(task_name)
+        if not task_info:
+            return
+
+        try:
+            logger.info("=" * 40)
+            logger.info(f"[{task_name}] 开始执行...")
+            task_info["func"]()
+            logger.info(f"[{task_name}] 执行完成")
+        except Exception as e:
+            logger.error(f"[{task_name}] 执行失败: {e}")
+        finally:
+            self._schedule_next(task_name)
+
+    def add_daily_task(self, name, func, schedule_time):
+        """
+        添加每日定时任务。
+        name: 任务名称
+        func: 任务函数
+        schedule_time: "HH:MM" 格式
+        """
+        hour, minute = schedule_time.split(":")
+        self.scheduler.add_job(
+            func,
+            trigger=CronTrigger(hour=int(hour), minute=int(minute)),
+            id=f"daily_{name}",
+            replace_existing=True,
+        )
+        logger.info(f"已注册每日定时任务 [{name}]，执行时间: {schedule_time}")
+
     def start(self):
         """启动调度器"""
-        logger.info("调度器启动，立即执行第一次任务...")
-        # 立即执行第一次
+        logger.info("调度器启动，立即执行主任务...")
+        # 立即执行主任务
         self.scheduler.add_job(
             self._run_task,
             trigger=DateTrigger(run_date=datetime.now()),
             id="first_poll",
         )
+        # 立即执行所有间隔任务的第一次
+        for name in self._interval_tasks:
+            next_time = datetime.fromtimestamp(time.time() + random.randint(5, 15))
+            self.scheduler.add_job(
+                lambda n=name: self._run_interval_task(n),
+                trigger=DateTrigger(run_date=next_time),
+                id=f"first_{name}",
+            )
+
         try:
             self.scheduler.start()
         except (KeyboardInterrupt, SystemExit):
