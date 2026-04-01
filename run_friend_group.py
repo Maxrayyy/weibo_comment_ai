@@ -1,7 +1,8 @@
 """
-微博自动评论 — 时间线模式（API抓取）
+微博自动评论 — 好友圈模式（Selenium抓取）
 
-通过微博官方API抓取首页时间线，过滤目标用户微博后自动评论。
+通过Selenium抓取好友圈分组页面微博，自动生成AI评论并发布。
+独立于时间线模式，可单独运行。
 """
 
 import random
@@ -21,25 +22,25 @@ from src.utils.config_loader import config
 from src.utils.rip_provider import get_rip
 from src.auth.login_manager import get_valid_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
-from src.scraper.api_fetcher import fetch_friends_weibos, fetch_followers
+from src.scraper.weibo_scraper import WeiboScraper
 from src.comment.ai_generator import generate_comment
 from src.comment.publisher import publish_comment
 from src.storage.record_store import record_store
 from src.scheduler.task_scheduler import TaskScheduler
 
 
-class TimelineBot:
-    """时间线自动评论机器人（API模式）"""
+class FriendGroupBot:
+    """好友圈自动评论机器人（Selenium模式）"""
 
     def __init__(self):
         self.my_uid = None
-        self.target_uids = []
         self.rip = None
+        self.scraper = None
 
     def init(self):
-        """初始化：IP → Cookie → OAuth → 目标用户"""
+        """初始化：IP → Cookie → OAuth → Selenium浏览器"""
         logger.info("=" * 50)
-        logger.info("微博自动评论 — 时间线模式")
+        logger.info("微博自动评论 — 好友圈模式")
         logger.info("=" * 50)
 
         self.rip = get_rip()
@@ -61,32 +62,36 @@ class TimelineBot:
         self.my_uid = get_uid(access_token)
         logger.info(f"OAuth认证通过 ✓ (UID: {self.my_uid})")
 
-        if config.whitelist:
-            self.target_uids = [str(uid) for uid in config.whitelist]
-            logger.info(f"白名单模式，{len(self.target_uids)} 个目标用户")
-        else:
-            followers = fetch_followers(self.my_uid)
-            self.target_uids = [f["uid"] for f in followers]
-            logger.info(f"从粉丝列表获取 {len(self.target_uids)} 个目标用户")
+        # 启动Selenium浏览器
+        self.scraper = WeiboScraper()
+        self.scraper.start()
+        logger.info("Selenium浏览器启动 ✓")
 
+        gid = config.friend_group_gid
         logger.info("=" * 50)
-        logger.info(f"  轮询间隔: {config.poll_min}~{config.poll_max}s")
+        logger.info(f"  好友圈GID: {gid}")
+        logger.info(f"  轮询间隔: {config.friend_group_poll_min}~{config.friend_group_poll_max}s")
+        logger.info(f"  滚动次数: {config.friend_group_scroll_times}")
         logger.info(f"  每日上限: {config.daily_limit} | 风格: {config.default_prompt_name}")
         logger.info(f"  工作时段: {config.work_hour_start}:00-{config.work_hour_end}:00")
         logger.info("=" * 50)
 
     def poll_and_comment(self):
-        """一次轮询：API抓取 → 过滤 → 评论"""
+        """一次轮询：Selenium抓取好友圈 → 过滤 → 评论"""
         try:
-            all_weibos = fetch_friends_weibos(count=70, page=2)
-            logger.info(f"API抓取到 {len(all_weibos)} 条微博")
+            gid = config.friend_group_gid
+            scroll_times = config.friend_group_scroll_times
+            weibos = self.scraper.fetch_group_timeline(gid, scroll_times)
 
+            if not weibos:
+                logger.info("[好友圈] 没有新微博")
+                return
+
+            # 过滤
             new_weibos = []
-            for weibo in all_weibos:
+            for weibo in weibos:
                 mid = weibo.get("mid", "")
                 if not mid or not weibo.get("text", "").strip():
-                    continue
-                if self.target_uids and weibo.get("user_id") not in self.target_uids:
                     continue
                 if weibo.get("user_id") == self.my_uid:
                     continue
@@ -97,22 +102,22 @@ class TimelineBot:
                 new_weibos.append(weibo)
 
             if not new_weibos:
-                logger.info("没有新微博")
+                logger.info("[好友圈] 过滤后无新微博")
                 return
 
-            logger.info(f"过滤后 {len(new_weibos)} 条待评论")
+            logger.info(f"[好友圈] {len(new_weibos)} 条待评论")
 
             for weibo in new_weibos:
                 if record_store.get_today_count() >= config.daily_limit:
-                    logger.info("已达今日上限")
+                    logger.info("[好友圈] 已达今日上限")
                     break
                 try:
                     self._comment_on_weibo(weibo)
                 except Exception as e:
-                    logger.error(f"评论出错 (mid={weibo.get('mid', '?')}): {e}")
+                    logger.error(f"[好友圈] 评论出错 (mid={weibo.get('mid', '?')}): {e}")
 
         except Exception as e:
-            logger.error(f"轮询异常: {e}")
+            logger.error(f"[好友圈] 轮询异常: {e}")
 
     def _comment_on_weibo(self, weibo):
         mid = weibo["mid"]
@@ -138,11 +143,13 @@ class TimelineBot:
             logger.warning(f"  ✗ 评论失败")
 
     def cleanup(self):
+        if self.scraper:
+            self.scraper.stop()
         logger.info("资源已清理")
 
 
 def main():
-    bot = TimelineBot()
+    bot = FriendGroupBot()
 
     def signal_handler(sig, frame):
         logger.info("\n收到退出信号，正在清理...")
@@ -154,7 +161,11 @@ def main():
 
     try:
         bot.init()
-        scheduler = TaskScheduler(bot.poll_and_comment)
+        scheduler = TaskScheduler(
+            bot.poll_and_comment,
+            poll_min=config.friend_group_poll_min,
+            poll_max=config.friend_group_poll_max,
+        )
         scheduler.start()
     except KeyboardInterrupt:
         logger.info("用户手动退出")

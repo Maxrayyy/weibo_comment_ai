@@ -21,15 +21,17 @@ from src.storage.record_store import record_store
 class TaskScheduler:
     """多任务调度器"""
 
-    def __init__(self, task_func):
+    def __init__(self, task_func, poll_min=None, poll_max=None):
         """
-        向后兼容：单任务模式。
         参数：
             task_func: 每次轮询要执行的任务函数（无参数）
+            poll_min/poll_max: 自定义主任务轮询间隔，None则使用config默认值
         """
         self.scheduler = BlockingScheduler()
         self.task_func = task_func
         self._running = True
+        self._poll_min = poll_min
+        self._poll_max = poll_max
         self._interval_tasks = {}  # name -> {func, poll_min, poll_max}
 
     def _is_work_hours(self):
@@ -51,8 +53,8 @@ class TaskScheduler:
             return
 
         if task_name == "default":
-            poll_min = config.poll_min
-            poll_max = config.poll_max
+            poll_min = self._poll_min or config.poll_min
+            poll_max = self._poll_max or config.poll_max
         else:
             task_info = self._interval_tasks.get(task_name, {})
             poll_min = task_info.get("poll_min", config.poll_min)
