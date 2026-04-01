@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import random
 
 from src.auth.login_manager import apply_cookies, load_cookies, WEIBO_HOME_URL
-from src.scraper.parser import parse_weibo_cards, parse_follow_list
+from src.scraper.parser import parse_weibo_cards, parse_group_weibo_cards, parse_follow_list
 from src.utils.logger import logger
 
 
@@ -200,7 +200,7 @@ class WeiboScraper:
                 break
 
         page_source = self.driver.page_source
-        weibos = parse_weibo_cards(page_source)
+        weibos = parse_group_weibo_cards(page_source)
         logger.info(f"好友圈抓取到 {len(weibos)} 条微博")
         for w in weibos:
             logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
