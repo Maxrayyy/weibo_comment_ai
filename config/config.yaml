@@ -15,7 +15,7 @@ llm:
   generate:
     api_key: "${DASHSCOPE_API_KEY}"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: "qwen3.5-plus"
+    model: "qwen3.5-flash"
     max_tokens: 150
 # 评论策略配置
 strategy:
@@ -44,8 +44,8 @@ timing:
   comment_delay_max: 15           # 评论延迟最大 50秒
 
 # 评论风格（引用prompts.yaml中的key）
-base_prompt: "weibo_base"         # 底座prompt
-default_prompt: "friendly"        # 默认评论风格
+base_prompt: "weibo_base"         # 单阶段隐式判断prompt
+default_prompt: "weibo_base"      # 保留兼容性
 
 # 好友圈评论配置
 friend_group:
