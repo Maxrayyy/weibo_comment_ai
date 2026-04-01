@@ -36,5 +36,6 @@ timing:
   comment_delay_min: 5            # 评论延迟最小 5秒
   comment_delay_max: 15           # 评论延迟最大 50秒
 
-# 默认评论风格
-default_prompt: "friendly"        # 引用prompts.yaml中的风格名
+# 评论风格（引用prompts.yaml中的key）
+base_prompt: "weibo_base"         # 底座prompt
+default_prompt: "friendly"        # 默认评论风格

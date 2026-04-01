@@ -15,17 +15,17 @@ from src.utils.logger import logger
 # 记录最近的评论，用于去重
 _recent_comments = deque(maxlen=20)
 
-# 多样性修饰词，随机附加到prompt中
-_style_variants = [
-    "这次语气更轻松一些",
-    "这次可以带一点感叹",
-    "这次用比较简短的方式回复",
-    "这次稍微认真一点回复",
-    "这次可以用反问的语气",
-    "这次表达一下共鸣",
-    "这次可以开个小玩笑",
-    "这次表示羡慕或者向往",
-]
+# 多样性修饰词，随机附加到prompt中（暂未启用）
+# _STYLE_VARIANTS = [
+#     "这次语气更轻松一些",
+#     "这次可以带一点感叹",
+#     "这次用比较简短的方式回复",
+#     "这次稍微认真一点回复",
+#     "这次可以用反问的语气",
+#     "这次表达一下共鸣",
+#     "这次可以开个小玩笑",
+#     "这次表示羡慕或者向往",
+# ]
 
 _IDENTITY_VARIANTS = [
     "你是刚刷到这条微博的路人",
@@ -37,7 +37,7 @@ _IDENTITY_VARIANTS = [
 
 def _build_messages(weibo_text, prompt_name=None):
     """构建Qwen API的消息列表"""
-    base_prompt = config.get_prompt("weibo_base")
+    base_prompt = config.get_prompt(config.base_prompt_name)
     style_prompt = config.get_prompt(prompt_name)
 
     identity = random.choice(_IDENTITY_VARIANTS)
@@ -51,8 +51,8 @@ def _build_messages(weibo_text, prompt_name=None):
     {style_prompt}
     """.strip()
 
-    # 随机加入多样性修饰
-    # variant = random.choice(_style_variants)
+    # 随机加入多样性修饰（暂未启用）
+    # variant = random.choice(_STYLE_VARIANTS)
     # system_prompt += f"\n额外要求：{variant}。"
 
     #user_prompt = f"请对以下微博内容生成一条自然的评论：\n\n{weibo_text}"
