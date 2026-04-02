@@ -21,12 +21,14 @@ from src.storage.record_store import record_store
 class TaskScheduler:
     """多任务调度器"""
 
-    def __init__(self, task_func, poll_min=None, poll_max=None, check_work_hours=True):
+    def __init__(self, task_func, poll_min=None, poll_max=None,
+                 check_work_hours=True, check_daily_limit=True):
         """
         参数：
             task_func: 每次轮询要执行的任务函数（无参数）
             poll_min/poll_max: 自定义主任务轮询间隔，None则使用config默认值
             check_work_hours: 是否检查工作时段，False则全天运行
+            check_daily_limit: 是否检查每日评论上限，回复模式等自行管理上限的场景可关闭
         """
         self.scheduler = BlockingScheduler()
         self.task_func = task_func
@@ -34,6 +36,7 @@ class TaskScheduler:
         self._poll_min = poll_min
         self._poll_max = poll_max
         self._check_work_hours = check_work_hours
+        self._check_daily_limit = check_daily_limit
         self._interval_tasks = {}  # name -> {func, poll_min, poll_max}
 
     def _is_work_hours(self):
@@ -80,7 +83,7 @@ class TaskScheduler:
             self._schedule_next()
             return
 
-        if self._is_daily_limit_reached():
+        if self._check_daily_limit and self._is_daily_limit_reached():
             self._schedule_next()
             return
 
