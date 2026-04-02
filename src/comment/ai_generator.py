@@ -11,6 +11,7 @@ from openai import OpenAI
 
 from src.utils.config_loader import config
 from src.utils.logger import logger
+from src.emotion.emotion_manager import get_emotion_prompt_text
 
 # 记录最近的评论，用于去重
 _recent_comments = deque(maxlen=20)
@@ -20,6 +21,11 @@ def _build_messages(weibo_text):
     system_prompt = config.get_prompt(config.base_prompt_name).strip()
 
     user_prompt = f"微博内容：\n{weibo_text}\n\n请直接给出评论，不要解释。"
+
+    # 注入可用表情列表
+    emotion_hint = get_emotion_prompt_text()
+    if emotion_hint:
+        user_prompt += emotion_hint
 
     # 注入近期评论引导多样性
     if _recent_comments:
