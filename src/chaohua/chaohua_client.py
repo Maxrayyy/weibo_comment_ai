@@ -322,6 +322,26 @@ class ChaohuaClient:
             textarea.click()
             time.sleep(0.5)
 
+            # 取消"同步到微博"复选框（默认勾选）
+            try:
+                sync_checkbox = self.driver.find_element(
+                    "xpath", "//label[contains(text(),'同步到微博')]/preceding-sibling::input | //label[contains(text(),'同步到微博')]/../input"
+                )
+                if sync_checkbox and sync_checkbox.get_attribute("checked"):
+                    sync_checkbox.click()
+                    logger.info("已取消'同步到微博'勾选")
+                    time.sleep(0.3)
+            except Exception:
+                # 备选：直接通过JS取消勾选
+                try:
+                    self.driver.execute_script("""
+                        var cb = document.querySelector('.publisher input[type=checkbox]');
+                        if (cb && cb.checked) { cb.click(); }
+                    """)
+                    logger.info("已通过JS取消'同步到微博'勾选")
+                except Exception as e:
+                    logger.debug(f"取消同步勾选失败(非关键): {e}")
+
             # 输入内容
             textarea.clear()
             textarea.send_keys(content)
