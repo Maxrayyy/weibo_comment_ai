@@ -323,24 +323,24 @@ class ChaohuaClient:
             time.sleep(0.5)
 
             # 取消"同步到微博"复选框（默认勾选）
+            # checkbox结构: <label for="xxx"><input name="sync_wb" checked="checked">同步到微博</label>
+            # 必须点击<label>才能正确触发取消
             try:
-                sync_checkbox = self.driver.find_element(
-                    "xpath", "//label[contains(text(),'同步到微博')]/preceding-sibling::input | //label[contains(text(),'同步到微博')]/../input"
+                sync_label = self.driver.find_element(
+                    "xpath", "//label[contains(text(),'同步到微博')]"
                 )
-                if sync_checkbox and sync_checkbox.get_attribute("checked"):
-                    sync_checkbox.click()
-                    logger.info("已取消'同步到微博'勾选")
+                sync_input = self.driver.find_element(
+                    "css selector", "input[name='sync_wb']"
+                )
+                if sync_input.get_attribute("checked"):
+                    sync_label.click()
                     time.sleep(0.3)
-            except Exception:
-                # 备选：直接通过JS取消勾选
-                try:
-                    self.driver.execute_script("""
-                        var cb = document.querySelector('.publisher input[type=checkbox]');
-                        if (cb && cb.checked) { cb.click(); }
-                    """)
-                    logger.info("已通过JS取消'同步到微博'勾选")
-                except Exception as e:
-                    logger.debug(f"取消同步勾选失败(非关键): {e}")
+                    if not sync_input.get_attribute("checked"):
+                        logger.info("已取消'同步到微博'勾选")
+                    else:
+                        logger.warning("点击label后checkbox仍为勾选状态")
+            except Exception as e:
+                logger.debug(f"取消同步勾选失败(非关键): {e}")
 
             # 输入内容
             textarea.clear()
