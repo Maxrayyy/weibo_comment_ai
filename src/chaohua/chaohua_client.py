@@ -280,10 +280,21 @@ class ChaohuaClient:
         logger.info(f"超话页面解析到 {len(weibos)} 条帖子")
         return weibos
 
+    def _sync_cookies_from_driver(self):
+        """从Selenium driver同步最新cookie到requests session"""
+        if not self.driver:
+            return
+        for c in self.driver.get_cookies():
+            self.session.cookies.set(
+                c["name"], c["value"],
+                domain=c.get("domain", ".weibo.com"),
+                path=c.get("path", "/"),
+            )
+
     def post_to_topic(self, containerid, content):
         """
         在超话中发帖。
-        通过huati.weibo.com的发帖接口。
+        通过Selenium模拟用户操作：在发帖框输入内容并点击发送。
 
         参数:
             containerid: 超话containerid
@@ -295,54 +306,52 @@ class ChaohuaClient:
             return False
 
         try:
-            # 先确保在超话页面上下文
             topic_url = f"https://weibo.com/p/{containerid}/super_index"
             current = self.driver.current_url
             if containerid not in current:
                 self.driver.get(topic_url)
-                time.sleep(3)
+                time.sleep(4)
 
-            # 获取CSRF token（xsrf-token）
-            xsrf_token = ""
-            cookies = self.driver.get_cookies()
-            for c in cookies:
-                if c["name"].upper() == "XSRF-TOKEN":
-                    xsrf_token = c["value"]
-                    break
+            # 找到发帖输入框（placeholder: "掐指一算，此帖必火"）
+            textarea = self.driver.find_element("css selector", "textarea.W_input")
+            if not textarea:
+                # 备选选择器
+                textarea = self.driver.find_element("css selector", "textarea[placeholder*='必火']")
 
-            # 通过Selenium的fetch调用发帖API
-            # 发帖内容需要包含超话标签
-            send_url = f"{SEND_CONTENT_URL}?sign=super&page_id={containerid}"
-            safe_content = content.replace("'", "\\'")
-            script = (
-                "try {"
-                "    const formData = new URLSearchParams();"
-                f"    formData.append('content', '{safe_content}');"
-                f"    formData.append('page_id', '{containerid}');"
-                f"    const resp = await fetch('{send_url}', {{"
-                "        method: 'POST',"
-                "        credentials: 'include',"
-                "        headers: {"
-                "            'Content-Type': 'application/x-www-form-urlencoded',"
-                f"            'Referer': '{topic_url}'"
-                "        },"
-                "        body: formData.toString()"
-                "    });"
-                "    const text = await resp.text();"
-                "    return text;"
-                "} catch(e) {"
-                "    return JSON.stringify({error: e.message});"
-                "}"
+            # 点击textarea激活
+            textarea.click()
+            time.sleep(0.5)
+
+            # 输入内容
+            textarea.clear()
+            textarea.send_keys(content)
+            time.sleep(1)
+
+            # 找到发送按钮并点击
+            # 按钮是 a.W_btn_a，输入内容后会从 W_btn_a_disable 变为可点击
+            submit_btn = self.driver.find_element(
+                "css selector", "a.W_btn_a.btn_30px:not(.W_btn_a_disable)"
             )
-            result = self.driver.execute_script(script)
+            if not submit_btn:
+                logger.warning("发送按钮仍为禁用状态，尝试强制点击")
+                submit_btn = self.driver.find_element("css selector", "a.W_btn_a.btn_30px")
 
-            if result:
-                logger.debug(f"发帖响应: {result[:300]}")
-                if '"code":100000' in result or '"ok":1' in result:
-                    logger.info(f"超话发帖成功: {content[:50]}")
-                    return True
+            submit_btn.click()
+            time.sleep(3)
 
-            logger.warning(f"超话发帖可能失败: {result[:200] if result else 'empty'}")
+            # 检查是否发帖成功：textarea被清空或页面出现新帖子
+            new_textarea_value = textarea.get_attribute("value") or ""
+            if not new_textarea_value.strip():
+                logger.info(f"超话发帖成功: {content[:50]}")
+                return True
+
+            # 检查页面是否有成功提示
+            page_text = self.driver.page_source
+            if "发布成功" in page_text:
+                logger.info(f"超话发帖成功: {content[:50]}")
+                return True
+
+            logger.warning(f"超话发帖结果不确定，输入框内容: {new_textarea_value[:50]}")
             return False
 
         except Exception as e:
