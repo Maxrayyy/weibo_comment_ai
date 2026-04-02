@@ -73,7 +73,7 @@ class FriendGroupBot:
         logger.info(f"  轮询间隔: {config.friend_group_poll_min}~{config.friend_group_poll_max}s")
         logger.info(f"  滚动次数: {config.friend_group_scroll_times}")
         logger.info(f"  每日上限: {config.daily_limit} | 风格: {config.default_prompt_name}")
-        logger.info(f"  工作时段: {config.work_hour_start}:00-{config.work_hour_end}:00")
+        logger.info(f"  工作时段: 全天运行（无时间限制）")
         logger.info("=" * 50)
 
     def poll_and_comment(self):
@@ -165,6 +165,7 @@ def main():
             bot.poll_and_comment,
             poll_min=config.friend_group_poll_min,
             poll_max=config.friend_group_poll_max,
+            check_work_hours=False,
         )
         scheduler.start()
     except KeyboardInterrupt:

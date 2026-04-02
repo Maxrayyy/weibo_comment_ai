@@ -34,15 +34,24 @@ class WeiboScraper:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option("useAutomationExtension", False)
         chromedriver_path = os.path.join(
             os.path.expanduser("~"), ".wdm", "drivers", "chromedriver",
             "win64", "146.0.7680.165", "chromedriver-win32", "chromedriver.exe"
         )
         service = Service(chromedriver_path)
         self.driver = webdriver.Chrome(service=service, options=options)
+        # 更全面的反检测注入
         self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-            "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            "source": """
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['zh-CN', 'zh', 'en']});
+                window.chrome = {runtime: {}};
+            """
         })
 
         cookies = load_cookies()
@@ -124,6 +133,14 @@ class WeiboScraper:
         if not self._safe_get(user_url):
             return []
 
+        # 等待页面渲染
+        try:
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "article"))
+            )
+        except Exception:
+            logger.warning(f"用户 {uid} 主页加载超时，尝试继续...")
+
         for i in range(scroll_times):
             try:
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -133,7 +150,10 @@ class WeiboScraper:
                 break
 
         page_source = self.driver.page_source
-        weibos = parse_weibo_cards(page_source)
+        # 优先使用article解析器（新版微博），回退到旧版解析器
+        weibos = parse_group_weibo_cards(page_source)
+        if not weibos:
+            weibos = parse_weibo_cards(page_source)
         for w in weibos:
             if not w.get("user_id"):
                 w["user_id"] = str(uid)
@@ -185,7 +205,7 @@ class WeiboScraper:
         # 等待SPA页面渲染
         try:
             WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "[action-type='feed_list_item'], .wbpro-feed, .card-wrap, [mid]"))
+                EC.presence_of_element_located((By.CSS_SELECTOR, "article"))
             )
         except Exception:
             logger.warning("好友圈页面加载超时，尝试继续解析...")

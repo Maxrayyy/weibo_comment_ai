@@ -21,17 +21,19 @@ from src.storage.record_store import record_store
 class TaskScheduler:
     """多任务调度器"""
 
-    def __init__(self, task_func, poll_min=None, poll_max=None):
+    def __init__(self, task_func, poll_min=None, poll_max=None, check_work_hours=True):
         """
         参数：
             task_func: 每次轮询要执行的任务函数（无参数）
             poll_min/poll_max: 自定义主任务轮询间隔，None则使用config默认值
+            check_work_hours: 是否检查工作时段，False则全天运行
         """
         self.scheduler = BlockingScheduler()
         self.task_func = task_func
         self._running = True
         self._poll_min = poll_min
         self._poll_max = poll_max
+        self._check_work_hours = check_work_hours
         self._interval_tasks = {}  # name -> {func, poll_min, poll_max}
 
     def _is_work_hours(self):
@@ -73,7 +75,7 @@ class TaskScheduler:
 
     def _run_task(self):
         """执行一次主轮询任务"""
-        if not self._is_work_hours():
+        if self._check_work_hours and not self._is_work_hours():
             logger.info(f"当前不在工作时段 ({config.work_hour_start}:00-{config.work_hour_end}:00)，跳过本次轮询")
             self._schedule_next()
             return
@@ -107,7 +109,7 @@ class TaskScheduler:
 
     def _run_interval_task(self, task_name):
         """执行一次间隔任务"""
-        if not self._is_work_hours():
+        if self._check_work_hours and not self._is_work_hours():
             logger.info(f"[{task_name}] 当前不在工作时段，跳过")
             self._schedule_next(task_name)
             return
