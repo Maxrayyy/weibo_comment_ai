@@ -126,7 +126,7 @@ class FriendGroupBot:
 
         logger.info(f"评论 @{user_name} (mid={mid}): {text[:80]}")
 
-        comment = generate_comment(text)
+        comment = generate_comment(text, pic_url=weibo.get("pic_url"))
         if not comment:
             logger.warning(f"评论生成失败，跳过 {mid}")
             return

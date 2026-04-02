@@ -68,7 +68,7 @@ class ChaohuaCommenter:
                 if config.skip_repost and weibo.get("is_repost"):
                     continue
 
-                comment = generate_comment(text)
+                comment = generate_comment(text, pic_url=weibo.get("pic_url"))
                 if not comment:
                     continue
 
