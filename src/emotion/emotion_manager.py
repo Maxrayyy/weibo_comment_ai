@@ -106,17 +106,46 @@ def get_emotion_list():
     return _cached_phrases
 
 
-def get_emotion_prompt_text(max_count=40):
+# 人工筛选的高频常用表情（覆盖日常评论场景）
+COMMON_EMOTIONS = [
+    # 开心/积极
+    "[哈哈]", "[太开心]", "[嘻嘻]", "[笑cry]", "[doge]", "[awsl]", "[666]",
+    "[赞]", "[good]", "[酷]", "[耶]", "[打call]", "[比耶]",
+    # 可爱/卖萌
+    "[可爱]", "[害羞]", "[馋嘴]", "[舔屏]", "[憧憬]", "[哇]", "[爱你]",
+    "[亲亲]", "[心]", "[送花花]", "[给你小心心]",
+    # 搞怪/调侃
+    "[挤眼]", "[坏笑]", "[偷笑]", "[阴险]", "[二哈]", "[喵喵]", "[吃瓜]",
+    "[摸鱼撸猫]", "[开摆]", "[淡淡的]",
+    # 无奈/难受
+    "[泪]", "[泪奔]", "[苦涩]", "[裂开]", "[允悲]", "[衰]", "[困]",
+    "[黑线]", "[汗]", "[费解]", "[跪了]",
+    # 生气/嫌弃
+    "[怒]", "[哼]", "[白眼]", "[鄙视]", "[抓狂]",
+    # 关心/温暖
+    "[抱抱]", "[抱一抱]", "[加油]", "[祈祷]", "[期待]",
+]
+
+
+def get_emotion_prompt_text():
     """
     获取用于注入prompt的表情提示文本。
+    使用人工筛选的常用表情 + API列表交叉验证。
     返回: 格式化的表情提示字符串，如果没有表情则返回空字符串。
     """
-    phrases = get_emotion_list()
-    if not phrases:
+    all_phrases = get_emotion_list()
+    if not all_phrases:
+        # API获取失败时直接用人工列表
+        valid = COMMON_EMOTIONS
+    else:
+        # 交叉验证：只保留API中确实存在的表情
+        api_set = set(all_phrases)
+        valid = [e for e in COMMON_EMOTIONS if e in api_set]
+
+    if not valid:
         return ""
 
-    sample = phrases[:max_count]
-    emotion_str = "".join(sample)
+    emotion_str = "".join(valid)
     return (
         f"\n\n你可以在评论中自然地使用微博表情，格式为[表情名]，可选表情：{emotion_str}\n"
         f"不是每条都要用，觉得合适再用，最多1-2个。"
