@@ -136,11 +136,10 @@ chaohua:
 
 ### 评论风格
 
-编辑 `config/prompts.yaml` 自定义评论风格。内置三种风格：
+编辑 `config/prompts.yaml` 自定义评论风格。内置两种风格：
 
 - `weibo_base` — 微博评论底座（默认，自然接话风格）
-- `weibo_friend` — 朋友圈风格（轻松机灵，冷幽默）
-- `weibo_reply` — 博主回复评论（回复模式专用）
+- `weibo_reply` — 回复评论（回复模式专用，支持博主回复和楼中楼回复两种场景）
 
 ## 使用
 
