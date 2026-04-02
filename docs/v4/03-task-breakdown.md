@@ -21,18 +21,26 @@
 
 ## Phase 2：核心模块
 
-### 2.1 reply_fetcher.py - 获取收到的评论
-- 调用 `comments/to_me.json`
-- 支持 since_id 增量拉取
-- 解析评论数据（含微博原文、楼中楼父评论）
+### 2.1 parser.py - 评论收件箱HTML解析器
+- 新增 `parse_comment_inbox(html)` 函数
+- 解析 `div.wbpro-scroller-item` 卡片
+- 提取评论ID（URL中的cid）、评论内容、评论者信息
+- 提取微博原文（引用区域）
+- 支持楼中楼场景（识别"回复@xxx:"前缀，提取被回复评论）
 
-### 2.2 reply_generator.py - AI生成回复
+### 2.2 reply_fetcher.py - Selenium抓取评论收件箱
+- 访问 `https://www.weibo.com/comment/inbox`
+- 等待页面加载 + 滚动加载更多
+- 调用 `parse_comment_inbox` 解析HTML
+- > 注：最初设计使用 `comments/to_me.json` API，因权限不足（error 10014）改为 Selenium
+
+### 2.3 reply_generator.py - AI生成回复
 - 构建回复场景的 prompt（微博原文 + 评论 + 父评论）
 - 复用 LLM 调用和验证逻辑
 - 支持去重
 
-### 2.3 reply_sender.py - 发送回复
-- 调用 `comments/reply.json`
+### 2.4 reply_sender.py - 发送回复
+- 调用 `comments/reply.json` API
 - 错误处理（频率限制、内容不合规等）
 
 **依赖**：Phase 1
@@ -40,9 +48,11 @@
 ## Phase 3：入口与调度
 
 ### 3.1 run_reply.py - 回复模式入口
-- ReplyBot 类：init() + poll_and_reply()
-- 集成 TaskScheduler 定时轮询
-- 过滤逻辑：跳过自己、已回复、超限
+- ReplyBot 类：init() + poll_and_reply() + cleanup()
+- init 中启动 WeiboScraper（Selenium浏览器）
+- 集成 TaskScheduler 定时轮询（check_daily_limit=False）
+- 过滤逻辑：跳过自己、已回复、空评论、超限
+- cleanup 中关闭 Selenium 浏览器
 - 信号处理与清理
 
 **依赖**：Phase 1 + Phase 2
@@ -51,10 +61,9 @@
 
 ### 4.1 语法检查
 - `python -m py_compile` 检查所有新文件
-- `python -c "import src.reply.reply_fetcher"` 等
 
 ### 4.2 集成验证
-- 运行入口文件检查初始化流程
-- 检查配置加载是否正确
+- 运行 `test/debug_v4_reply.py` 验证完整流程
+- 测试项：配置加载、Selenium抓取评论、AI回复生成、记录存储
 
 **依赖**：Phase 3

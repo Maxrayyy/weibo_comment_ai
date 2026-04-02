@@ -105,76 +105,44 @@ friend_group:
 
 ## 三、超话功能
 
-### 3.1 API 分析
+### 3.1 技术方案
 
-超话功能使用微博**移动端内部 API**（`api.weibo.cn`），非公开 API，认证参数需通过手机抓包获取。
+> **注**：最初设计使用微博移动端 API（`api.weibo.cn`）+ 手机抓包获取认证参数，但实际实现中改为 **PC Cookie + Selenium** 方案，无需手机抓包，与好友圈功能共用认证体系。
 
-#### 关键 API 端点
+超话功能通过 Selenium 操作 PC 端微博页面，结合 requests 调用 PC 端可用的 API 实现。
 
-| 功能 | URL | 方法 | 说明 |
-|------|-----|------|------|
-| 超话列表 | `https://api.weibo.cn/2/cardlist` | GET | containerid=100803_-_followsuper |
-| 超话签到 | `https://api.weibo.cn/2/page/button` | GET/POST | 签到按钮action |
-| 超话Feed | `https://api.weibo.cn/2/cardlist` | GET | containerid=超话containerid |
-| 发微博 | `https://api.weibo.cn/2/statuses/send` | POST | 带超话topic参数 |
+#### 认证方式
 
-#### 认证参数
-
-通过手机微博 App 抓包获取，关键参数：
-
-```
-gsid=xxx           # 会话标识（核心认证参数）
-s=xxx              # 签名
-from=xxx           # 来源标识
-c=xxx              # 客户端标识
-aid=xxx            # App ID
-```
-
-这些参数拼接在 URL query string 中，类似于：
-```
-https://api.weibo.cn/2/cardlist?gsid=_2A25xxx&s=xxx&from=10DC395010&c=android&containerid=100803_-_followsuper
-```
-
-#### 请求头
-
-```python
-HEADERS = {
-    "User-Agent": "Weibo/81434 (iPhone; iOS 17.0; Scale/3.00)",
-    "Host": "api.weibo.cn",
-    "Accept-Encoding": "gzip, deflate",
-    "Connection": "keep-alive",
-}
-```
+- 复用 `login_manager.py` 的 PC Cookie（与好友圈、时间线模式共用）
+- ChaohuaClient 接受 `uid`、`cookies`、`driver` 参数
+- 无需手机抓包或移动端认证参数
 
 ### 3.2 超话签到实现
 
-#### ChaohuaClient（API客户端）
+#### ChaohuaClient（超话客户端）
 
 ```python
 class ChaohuaClient:
-    """微博超话API客户端"""
+    """微博超话客户端（基于PC Cookie + Selenium）"""
 
-    CARDLIST_URL = "https://api.weibo.cn/2/cardlist"
-    SIGN_URL = "https://api.weibo.cn/2/page/button"
-    STATUS_URL = "https://api.weibo.cn/2/statuses/send"
+    def __init__(self, uid, cookies, driver):
+        """
+        uid: 用户UID
+        cookies: PC端Cookie列表
+        driver: Selenium WebDriver实例
+        """
 
-    def __init__(self, auth_params: dict):
-        """auth_params: 从抓包URL中提取的认证参数"""
-        self.auth_params = auth_params
-        self.session = requests.Session()
-        self.session.headers.update(HEADERS)
+    def get_followed_chaohua(self) -> list[dict]:
+        """获取关注的超话列表"""
 
-    def get_followed_chaohua(self, since_id=None) -> list[dict]:
-        """获取关注的超话列表（支持分页）"""
-
-    def sign_in(self, chaohua_id: str) -> bool:
+    def sign_in(self, containerid: str) -> bool:
         """对单个超话签到"""
 
-    def get_chaohua_feed(self, containerid: str, since_id=None) -> list[dict]:
+    def get_topic_feed(self, containerid: str, scroll_times=2) -> list[dict]:
         """获取超话内微博feed"""
 
-    def post_to_chaohua(self, topic_id: str, content: str) -> bool:
-        """在超话中发帖"""
+    def post_to_topic(self, containerid: str, content: str) -> bool:
+        """在超话中发帖（通过Selenium模拟用户操作）"""
 ```
 
 #### ChaohuaSigner（签到业务）
@@ -230,8 +198,7 @@ class ChaohuaCommenter:
 # config.yaml 新增
 chaohua:
   enabled: true
-  # 认证参数（从抓包URL中提取，定期更新）
-  auth_url: "${WEIBO_CHAOHUA_AUTH_URL}"
+  # 无需移动端认证参数，使用PC Cookie
 
   # 签到配置
   sign:
@@ -258,17 +225,11 @@ chaohua:
     poll_max: 300
 ```
 
-### 3.6 认证参数获取流程
+### 3.6 认证说明
 
-由于超话 API 使用移动端内部接口，认证参数需要用户手动抓包获取：
+超话功能使用 PC Cookie 认证，与好友圈、时间线模式共用 `data/cookies.json`。无需手机抓包或额外配置认证参数。
 
-1. 手机安装抓包工具（Charles / HttpCanary / Stream 等）
-2. 打开微博 App，进入"超话"页面
-3. 在抓包工具中搜索 `api.weibo.cn/2/cardlist`
-4. 复制完整 URL（包含 gsid、s、from 等参数）
-5. 将完整 URL 设置到环境变量 `WEIBO_CHAOHUA_AUTH_URL`
-
-**注意**：认证参数会过期，需要定期更新。程序检测到认证失败时会打印提示。
+Cookie 过期时程序会自动打开浏览器窗口提示重新登录。
 
 ---
 
@@ -323,7 +284,7 @@ class MultiTaskScheduler:
 | 风险 | 应对 |
 |------|------|
 | 好友圈页面 DOM 结构变化 | 选择器集中配置，便于快速更新 |
-| 超话 API 参数过期 | 检测 401/403 响应，提示用户更新 |
-| 超话 API 接口变更 | 参考文档中记录的接口为2025年版本，实际实现时需验证 |
+| PC Cookie 过期 | 检测登录状态，自动提示重新登录 |
+| 超话页面结构变更 | Selenium选择器集中配置，便于更新 |
 | 频率限制/封号 | 严格随机延迟 + 每日限额 + 工作时间窗口 |
 | Selenium 资源占用 | 好友圈抓取完毕后及时关闭 browser session |

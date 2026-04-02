@@ -27,11 +27,10 @@
 
 ## Phase 2：超话基础设施
 
-### Task 2.1 - 超话 API 客户端
+### Task 2.1 - 超话客户端
 - **文件**：`src/chaohua/__init__.py`, `src/chaohua/chaohua_client.py`
 - **内容**：
-  - 实现 ChaohuaClient 类
-  - 从 auth_url 解析认证参数
+  - 实现 ChaohuaClient 类（基于PC Cookie + Selenium）
   - 实现 `get_followed_chaohua()` 获取超话列表
   - 实现基础请求方法，处理分页和错误
 - **验证**：能正确获取关注超话列表

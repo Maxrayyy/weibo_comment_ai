@@ -7,9 +7,11 @@
 ```
 src/
 ├── reply/                          # 新增：回复模块
-│   ├── reply_fetcher.py            # 获取收到的评论
+│   ├── reply_fetcher.py            # Selenium抓取评论收件箱
 │   ├── reply_generator.py          # AI生成回复内容
-│   └── reply_sender.py             # 发送回复
+│   └── reply_sender.py             # API发送回复
+├── scraper/
+│   └── parser.py                   # 新增 parse_comment_inbox() 解析器
 run_reply.py                        # 新增：回复模式入口
 ```
 
@@ -22,16 +24,18 @@ ReplyBot.init()
   ├─ 获取公网IP
   ├─ Cookie验证
   ├─ OAuth认证
-  └─ 获取自己的UID
+  ├─ 获取自己的UID
+  └─ 启动Selenium浏览器 (WeiboScraper)
   ↓
 TaskScheduler 定时轮询
   ↓
 ReplyBot.poll_and_reply()
-  ├─ 1. 获取收到的评论列表 (reply_fetcher)
-  │     └─ GET comments/to_me.json
-  ├─ 2. 过滤：跳过自己、已回复、非工作时段
+  ├─ 1. Selenium抓取评论收件箱页面 (reply_fetcher)
+  │     └─ GET https://www.weibo.com/comment/inbox
+  │     └─ 滚动加载 + HTML解析 (parse_comment_inbox)
+  ├─ 2. 过滤：跳过自己、已回复、空评论
   ├─ 3. 对每条评论：
-  │     ├─ a. 收集上下文（微博原文 + 评论 + 父评论）
+  │     ├─ a. 上下文已从HTML中提取（微博原文 + 评论 + 父评论）
   │     ├─ b. AI生成回复 (reply_generator)
   │     ├─ c. 随机延迟
   │     └─ d. 发送回复 (reply_sender)
@@ -39,63 +43,47 @@ ReplyBot.poll_and_reply()
   └─ 4. 记录已回复
 ```
 
-## 接口分析
+## 评论获取方案
 
-### 1. 获取收到的评论
+> **方案变更说明**：最初设计使用 `comments/to_me.json` API 获取评论，但测试发现返回错误码 10014（Insufficient app permissions），应用缺少该接口权限。改为 Selenium 抓取评论收件箱页面。
 
-**接口**：`GET https://api.weibo.com/2/comments/to_me.json`
+### Selenium 抓取评论收件箱
 
-**参数**：
-| 参数 | 类型 | 说明 |
-|------|------|------|
-| access_token | string | OAuth token |
-| since_id | int64 | 上次获取的最大评论ID，用于增量拉取 |
-| max_id | int64 | 返回小于等于此ID的评论 |
-| count | int | 每页数量，默认50，最大200 |
-| page | int | 页码 |
-| filter_by_author | int | 0-全部，1-关注的人，2-陌生人 |
+**页面 URL**：`https://www.weibo.com/comment/inbox`
 
-**返回数据结构**：
-```json
-{
-  "comments": [
-    {
-      "id": 1234567890,
-      "text": "评论内容",
-      "created_at": "Mon Jan 01 12:00:00 +0800 2025",
-      "user": {
-        "id": 123456,
-        "screen_name": "用户昵称"
-      },
-      "status": {
-        "id": 9876543210,
-        "mid": "9876543210",
-        "text": "微博原文内容",
-        "user": {
-          "id": 654321,
-          "screen_name": "博主昵称"
-        }
-      },
-      "reply_comment": {
-        "id": 1111111111,
-        "text": "被回复的评论内容",
-        "user": {
-          "id": 222222,
-          "screen_name": "被回复者"
-        }
-      }
-    }
-  ],
-  "total_number": 100
-}
+**页面结构**（每个评论卡片）：
+```
+div.wbpro-scroller-item          # 卡片容器
+├── div._h3_ > a                 # 评论者昵称（href含UID）
+├── div._from_ > a               # 时间（href含cid评论ID和微博bid）
+├── div._wbtext_._textImg_       # 评论内容（楼中楼以"回复@xxx:"开头）
+└── div._repeatbox_              # 引用区域
+    ├── div._replyComment_       # 楼中楼被回复的评论
+    │   ├── span._replyCname_    # 被回复者昵称
+    │   └── span                 # 被回复的评论内容
+    └── div.feed-card-repost     # 原微博卡片
+        ├── h4._title_           # 博主昵称
+        └── div._messText_       # 微博原文
 ```
 
-**关键点**：
-- `status` 字段包含被评论的微博原文
-- `reply_comment` 字段包含楼中楼场景下被回复的评论（如果是直接评论微博则无此字段）
-- 使用 `since_id` 实现增量拉取，避免重复处理
+**关键提取字段**：
 
-### 2. 回复评论
+| 字段 | CSS选择器 | 提取方式 |
+|------|---------|--------|
+| 评论ID | `div._from_ > a` | URL中的 `cid` 参数 |
+| 评论者UID | `div._h3_ > a` | URL中的 `/u/数字` |
+| 评论者昵称 | `div._h3_ > a` | 文本内容 |
+| 评论内容 | `div._wbtext_._textImg_` | 文本（楼中楼去掉"回复@xxx:"前缀） |
+| 微博ID | `div._from_ > a` | URL中的bid → `bid_to_mid()` 转换 |
+| 微博原文 | `div._messText_` | 文本内容 |
+| 被回复评论 | `div._replyComment_ > span` | 文本内容（楼中楼场景） |
+| 评论时间 | `div._from_ > a` | 文本内容 |
+
+### 解析器
+
+在 `src/scraper/parser.py` 中新增 `parse_comment_inbox(html)` 函数，返回统一格式的评论列表。
+
+## 回复发送
 
 **接口**：`POST https://api.weibo.com/2/comments/reply.json`
 
@@ -111,14 +99,6 @@ ReplyBot.poll_and_reply()
 | rip | string | 用户真实IP |
 
 **返回**：成功返回评论对象（含id），失败返回error_code。
-
-### 3. 获取单条微博信息（备用）
-
-**接口**：`GET https://api.weibo.com/2/statuses/show.json`
-
-**参数**：access_token, id（微博ID）
-
-**用途**：当 `comments/to_me` 返回的 status 信息不完整时，补充获取微博原文。
 
 ## 配置方案
 
@@ -184,29 +164,33 @@ reply_prompt_name -> str
 - `is_replied(comment_id)` - 是否已回复
 - `add_reply_record(comment_id, reply_text, weibo_mid, comment_user, reply_cid)` - 记录回复
 - `get_reply_today_count()` - 今日回复数
-- `get_reply_since_id()` / `set_reply_since_id(since_id)` - 增量拉取游标
+- `get_reply_since_id()` / `set_reply_since_id(since_id)` - 增量拉取游标（Selenium模式下作为备用）
 
 ## 模块详细设计
 
 ### reply_fetcher.py
 
 ```python
-COMMENTS_TO_ME_URL = "https://api.weibo.com/2/comments/to_me.json"
+COMMENT_INBOX_URL = "https://www.weibo.com/comment/inbox"
 
-def fetch_comments_to_me(since_id=0, count=50):
+def fetch_comments_to_me(driver, scroll_times=2):
     """
-    获取收到的评论列表（增量拉取）
-    
-    返回：[{
-        "comment_id": str,       # 评论ID
-        "comment_text": str,     # 评论内容
-        "comment_user_id": str,  # 评论者UID
-        "comment_user_name": str,# 评论者昵称
-        "weibo_mid": str,        # 微博ID
-        "weibo_text": str,       # 微博原文
-        "reply_comment_text": str,  # 被回复的评论（楼中楼，可选）
-        "reply_comment_user": str,  # 被回复者昵称（可选）
-        "created_at": str,       # 评论时间
+    通过Selenium抓取评论收件箱页面，获取收到的评论列表。
+
+    参数：
+        driver: Selenium WebDriver 实例
+        scroll_times: 页面滚动次数
+
+    返回：评论列表 [{
+        "comment_id": str,
+        "comment_text": str,
+        "comment_user_id": str,
+        "comment_user_name": str,
+        "weibo_mid": str,
+        "weibo_text": str,
+        "reply_comment_text": str or None,
+        "reply_comment_user": str or None,
+        "created_at": str,
     }, ...]
     """
 ```
@@ -217,13 +201,13 @@ def fetch_comments_to_me(since_id=0, count=50):
 def generate_reply(weibo_text, comment_text, reply_comment_text=None, max_retries=3):
     """
     根据微博内容和评论内容生成回复
-    
+
     参数：
         weibo_text: 微博原文
         comment_text: 需要回复的评论
         reply_comment_text: 楼中楼场景下被回复的原始评论（可选）
         max_retries: 最大重试次数
-    
+
     返回：回复文本，失败返回None
     """
 ```
@@ -231,9 +215,9 @@ def generate_reply(weibo_text, comment_text, reply_comment_text=None, max_retrie
 **消息构建**：
 ```
 System: weibo_reply prompt
-User: 
-  微博原文：{weibo_text}
-  [你之前的评论：{reply_comment_text}]  （楼中楼场景）
+User:
+  我的微博原文：{weibo_text}
+  [我之前的评论：{reply_comment_text}]  （楼中楼场景）
   对方评论：{comment_text}
   请回复这条评论。
 ```
@@ -246,13 +230,31 @@ COMMENT_REPLY_URL = "https://api.weibo.com/2/comments/reply.json"
 def send_reply(weibo_mid, comment_id, reply_text, rip):
     """
     回复指定评论
-    
+
     参数：
         weibo_mid: 微博ID
         comment_id: 要回复的评论ID
         reply_text: 回复内容
         rip: 用户真实IP
-    
+
     返回：成功返回API响应dict，失败返回None
     """
 ```
+
+### run_reply.py
+
+```python
+class ReplyBot:
+    """自动回复评论机器人"""
+
+    def init(self):
+        """初始化：IP → Cookie → OAuth → Selenium浏览器"""
+
+    def poll_and_reply(self):
+        """一次轮询：Selenium抓取评论 → 过滤 → AI回复 → 发送"""
+
+    def cleanup(self):
+        """关闭Selenium浏览器"""
+```
+
+集成 `TaskScheduler`，设置 `check_daily_limit=False`（回复模式自行管理上限）。
