@@ -250,6 +250,23 @@ class ChaohuaClient:
             # 判断是否为转发
             is_repost = bool(item.find("div", class_="WB_feed_expand"))
 
+            # 提取第一张图片URL
+            pic_url = ""
+            media_wrap = item.find("div", class_="WB_media_wrap") or item
+            img_el = media_wrap.find("img", src=re.compile(r"sinaimg\.cn"))
+            if img_el:
+                src = img_el.get("src", "")
+                if "face" not in src and "emoticon" not in src:
+                    pic_url = re.sub(
+                        r"(sinaimg\.cn/)(thumbnail|bmiddle|orj360|orj480|thumb150|square|small|mw\d+|large)",
+                        r"\1mw690",
+                        src,
+                    )
+                    if pic_url.startswith("//"):
+                        pic_url = "https:" + pic_url
+                    elif pic_url.startswith("http://"):
+                        pic_url = pic_url.replace("http://", "https://", 1)
+
             if mid and text:
                 weibos.append({
                     "mid": mid,
@@ -257,6 +274,7 @@ class ChaohuaClient:
                     "user_id": user_id,
                     "user_name": user_name,
                     "is_repost": is_repost,
+                    "pic_url": pic_url,
                 })
 
         logger.info(f"超话页面解析到 {len(weibos)} 条帖子")

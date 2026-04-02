@@ -10,6 +10,33 @@ from bs4 import BeautifulSoup
 from src.utils.logger import logger
 
 
+def _extract_first_pic(element):
+    """
+    从页面元素中提取第一张微博图片URL。
+    将缩略图URL转为中等尺寸（mw690）。
+    返回图片URL字符串，无图返回空字符串。
+    """
+    imgs = element.find_all("img", src=re.compile(r"sinaimg\.cn"))
+    for img in imgs:
+        src = img.get("src", "")
+        # 跳过表情图片（表情域名为 face.t.sinajs.cn 或尺寸很小的图）
+        if "face" in src or "emoticon" in src:
+            continue
+        # 将任意尺寸替换为 mw690（中等偏大，适合模型识别）
+        pic_url = re.sub(
+            r"(sinaimg\.cn/)(thumbnail|bmiddle|orj360|orj480|thumb150|square|small|mw\d+|large)",
+            r"\1mw690",
+            src,
+        )
+        # 确保是https
+        if pic_url.startswith("//"):
+            pic_url = "https:" + pic_url
+        elif pic_url.startswith("http://"):
+            pic_url = pic_url.replace("http://", "https://", 1)
+        return pic_url
+    return ""
+
+
 def parse_weibo_cards(html):
     """
     从微博页面HTML中解析微博卡片信息。
@@ -84,6 +111,9 @@ def _extract_weibo_from_card(card):
     # 提取发布时间
     time_elem = card.find("a", class_=re.compile(r"time|from")) or card.find("span", class_=re.compile(r"time|from"))
     weibo["created_at"] = time_elem.get_text(strip=True) if time_elem else ""
+
+    # 提取第一张图片URL
+    weibo["pic_url"] = _extract_first_pic(card)
 
     return weibo
 
@@ -173,6 +203,9 @@ def _extract_weibo_from_article(article):
     # 提取发布时间
     time_link = article.find("a", href=re.compile(r"weibo\.com/\d+/\w+"))
     weibo["created_at"] = time_link.get_text(strip=True) if time_link else ""
+
+    # 提取第一张图片URL
+    weibo["pic_url"] = _extract_first_pic(article)
 
     return weibo
 

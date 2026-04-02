@@ -114,6 +114,9 @@ def _parse_status(status):
     if not text:
         return None
 
+    # 提取第一张图片URL（中等尺寸）
+    pic_url = status.get("bmiddle_pic", "") or ""
+
     return {
         "mid": str(status.get("mid", status.get("id", ""))),
         "user_id": str(user.get("id", "")),
@@ -121,4 +124,5 @@ def _parse_status(status):
         "text": text,
         "is_repost": status.get("retweeted_status") is not None,
         "created_at": status.get("created_at", ""),
+        "pic_url": pic_url,
     }
