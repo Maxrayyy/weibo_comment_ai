@@ -55,7 +55,7 @@ def main():
         topic = topics[0]
         logger.info(f"目标超话: [{topic['name']}] (containerid: {topic['containerid']})")
 
-        content = "打卡"
+        content = "第一次来这个超话，先打个招呼～[太开心]"
         logger.info(f"发帖内容: {content}")
 
         success = client.post_to_topic(topic["containerid"], content)
