@@ -55,6 +55,16 @@ friend_group:
   poll_min: 60                    # 轮询最小间隔（秒）
   poll_max: 120                   # 轮询最大间隔（秒）
 
+# 自动回复评论配置
+reply:
+  enabled: true
+  daily_limit: 30                   # 每日回复上限
+  poll_min: 60                      # 轮询最小间隔（秒）
+  poll_max: 180                     # 轮询最大间隔（秒）
+  reply_delay_min: 5                # 回复前延迟最小（秒）
+  reply_delay_max: 15               # 回复前延迟最大（秒）
+  prompt: "weibo_reply"             # 回复使用的prompt模板
+
 # 超话功能配置（基于PC Cookie，无需手机抓包）
 chaohua:
   enabled: false

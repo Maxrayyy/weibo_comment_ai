@@ -170,6 +170,38 @@ class Config:
     def friend_group_poll_max(self):
         return self._config.get("friend_group", {}).get("poll_max", 120)
 
+    # --- 回复评论配置 ---
+    def _reply_config(self):
+        return self._config.get("reply", {})
+
+    @property
+    def reply_enabled(self):
+        return self._reply_config().get("enabled", False)
+
+    @property
+    def reply_daily_limit(self):
+        return self._reply_config().get("daily_limit", 30)
+
+    @property
+    def reply_poll_min(self):
+        return self._reply_config().get("poll_min", 60)
+
+    @property
+    def reply_poll_max(self):
+        return self._reply_config().get("poll_max", 180)
+
+    @property
+    def reply_delay_min(self):
+        return self._reply_config().get("reply_delay_min", 5)
+
+    @property
+    def reply_delay_max(self):
+        return self._reply_config().get("reply_delay_max", 15)
+
+    @property
+    def reply_prompt_name(self):
+        return self._reply_config().get("prompt", "weibo_reply")
+
     # --- 超话配置 ---
     @property
     def chaohua_enabled(self):

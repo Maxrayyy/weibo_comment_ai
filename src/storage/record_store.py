@@ -30,6 +30,9 @@ class RecordStore:
         "chaohua_posted": {},
         "chaohua_comment_counts": {},
         "chaohua_post_counts": {},
+        "replied": {},
+        "reply_daily_counts": {},
+        "reply_since_id": 0,
     }
 
     def _load(self):
@@ -126,6 +129,44 @@ class RecordStore:
         """获取今日超话评论数"""
         today = datetime.now().strftime("%Y-%m-%d")
         return self._records.get("chaohua_comment_counts", {}).get(today, 0)
+
+
+    # --- 回复评论记录 ---
+    def is_replied(self, comment_id):
+        """检查某条评论是否已回复"""
+        return str(comment_id) in self._records.get("replied", {})
+
+    def add_reply_record(self, comment_id, reply_text, weibo_mid, comment_user, reply_cid=None):
+        """添加一条回复记录"""
+        comment_id = str(comment_id)
+        today = datetime.now().strftime("%Y-%m-%d")
+        record = {
+            "reply_text": reply_text,
+            "weibo_mid": str(weibo_mid),
+            "comment_user": comment_user,
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        if reply_cid:
+            record["reply_cid"] = str(reply_cid)
+        self._records.setdefault("replied", {})[comment_id] = record
+        self._records.setdefault("reply_daily_counts", {})
+        self._records["reply_daily_counts"][today] = self._records["reply_daily_counts"].get(today, 0) + 1
+        self._save()
+        logger.info(f"回复记录已保存，评论ID: {comment_id}")
+
+    def get_reply_today_count(self):
+        """获取今日已回复数"""
+        today = datetime.now().strftime("%Y-%m-%d")
+        return self._records.get("reply_daily_counts", {}).get(today, 0)
+
+    def get_reply_since_id(self):
+        """获取上次拉取的最大评论ID（用于增量拉取）"""
+        return self._records.get("reply_since_id", 0)
+
+    def set_reply_since_id(self, since_id):
+        """更新增量拉取游标"""
+        self._records["reply_since_id"] = since_id
+        self._save()
 
 
 record_store = RecordStore()
