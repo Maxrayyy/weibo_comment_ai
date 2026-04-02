@@ -5,7 +5,6 @@
 边判断接话方式、边生成评论，不输出分析过程。
 """
 
-import random
 from collections import deque
 
 from openai import OpenAI
@@ -16,24 +15,9 @@ from src.utils.logger import logger
 # 记录最近的评论，用于去重
 _recent_comments = deque(maxlen=20)
 
-# 多样性：随机身份
-_IDENTITY_VARIANTS = [
-    "你是刚刷到这条微博的路人",
-    "你是深夜刷微博的用户",
-    "你是在评论区潜水已久的人",
-    "你是看完忍不住想说一句的网友",
-    "你是刷到这条内容有点共鸣的人",
-]
-
-
 def _build_messages(weibo_text):
     """构建消息列表（单阶段隐式判断，无需外部指定风格）"""
-    system_prompt_text = config.get_prompt(config.base_prompt_name)
-    identity = random.choice(_IDENTITY_VARIANTS)
-
-    system_prompt = f"""{system_prompt_text}
-
-你的当前状态：{identity}""".strip()
+    system_prompt = config.get_prompt(config.base_prompt_name).strip()
 
     user_prompt = f"微博内容：\n{weibo_text}\n\n请直接给出评论，不要解释。"
 
@@ -103,7 +87,7 @@ def generate_comment(weibo_text, prompt_name=None, max_retries=3):
                 model=config.generate_model,
                 messages=messages,
                 max_tokens=config.generate_max_tokens,
-                temperature=0.92,
+                temperature=0.89,
             )
 
             comment = response.choices[0].message.content.strip()
