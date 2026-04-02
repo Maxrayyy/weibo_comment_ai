@@ -15,7 +15,7 @@ llm:
   generate:
     api_key: "${DASHSCOPE_API_KEY}"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: "qwen3.5-plus"
+    model: "qwen3.5-flash"
     max_tokens: 150
 # 评论策略配置
 strategy:
