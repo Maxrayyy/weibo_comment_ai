@@ -3,6 +3,7 @@
 
 监控自己微博下收到的评论，自动生成并发送回复。
 支持直接评论和楼中楼回复。
+通过Selenium抓取评论收件箱页面获取评论。
 """
 
 import random
@@ -22,6 +23,7 @@ from src.utils.config_loader import config
 from src.utils.rip_provider import get_rip
 from src.auth.login_manager import get_valid_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
+from src.scraper.weibo_scraper import WeiboScraper
 from src.reply.reply_fetcher import fetch_comments_to_me
 from src.reply.reply_generator import generate_reply
 from src.reply.reply_sender import send_reply
@@ -35,9 +37,10 @@ class ReplyBot:
     def __init__(self):
         self.my_uid = None
         self.rip = None
+        self.scraper = None
 
     def init(self):
-        """初始化：IP → Cookie → OAuth"""
+        """初始化：IP → Cookie → OAuth → Selenium"""
         logger.info("=" * 50)
         logger.info("微博自动回复评论 — 回复模式")
         logger.info("=" * 50)
@@ -61,6 +64,11 @@ class ReplyBot:
         self.my_uid = str(get_uid(access_token))
         logger.info(f"OAuth认证通过 ✓ (UID: {self.my_uid})")
 
+        # 启动Selenium浏览器
+        self.scraper = WeiboScraper()
+        self.scraper.start()
+        logger.info("Selenium浏览器启动 ✓")
+
         logger.info("=" * 50)
         logger.info(f"  轮询间隔: {config.reply_poll_min}~{config.reply_poll_max}s")
         logger.info(f"  每日上限: {config.reply_daily_limit}")
@@ -71,15 +79,10 @@ class ReplyBot:
     def poll_and_reply(self):
         """一次轮询：获取新评论 → 过滤 → 回复"""
         try:
-            since_id = record_store.get_reply_since_id()
-            comments = fetch_comments_to_me(since_id=since_id)
+            comments = fetch_comments_to_me(driver=self.scraper.driver)
 
             if not comments:
                 return
-
-            # 更新 since_id 为本批次最大的评论ID
-            max_id = max(int(c["comment_id"]) for c in comments)
-            record_store.set_reply_since_id(max_id)
 
             # 过滤
             new_comments = []
@@ -157,6 +160,8 @@ class ReplyBot:
             logger.warning(f"  ✗ 回复失败")
 
     def cleanup(self):
+        if self.scraper:
+            self.scraper.stop()
         logger.info("资源已清理")
 
 

@@ -210,6 +210,148 @@ def _extract_weibo_from_article(article):
     return weibo
 
 
+# ====== 评论收件箱页面解析 ======
+
+def parse_comment_inbox(html):
+    """
+    解析评论收件箱页面（https://www.weibo.com/comment/inbox）。
+    返回评论列表，每条评论包含：
+    {
+        "comment_id": 评论ID,
+        "comment_text": 评论内容,
+        "comment_user_id": 评论者UID,
+        "comment_user_name": 评论者昵称,
+        "weibo_mid": 微博ID（从URL提取）,
+        "weibo_text": 微博原文,
+        "reply_comment_text": 被回复的评论内容（楼中楼，可选）,
+        "reply_comment_user": 被回复者昵称（可选）,
+        "created_at": 评论时间文本,
+    }
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    comments = []
+
+    # 每个评论卡片是一个 wbpro-scroller-item
+    cards = soup.find_all("div", class_="wbpro-scroller-item")
+    if not cards:
+        # 备选：直接找包含评论内容的面板
+        cards = soup.find_all("div", class_=re.compile(r"_wrap_1bd52"))
+
+    for card in cards:
+        try:
+            comment = _extract_comment_from_card(card)
+            if comment and comment.get("comment_id") and comment.get("comment_text"):
+                comments.append(comment)
+        except Exception as e:
+            logger.debug(f"解析评论卡片失败: {e}")
+            continue
+
+    return comments
+
+
+def _extract_comment_from_card(card):
+    """从评论收件箱页面的单个卡片中提取评论信息"""
+    comment = {}
+
+    # 1. 提取评论者昵称和UID
+    # 昵称在 _h3_ 容器的链接中
+    name_elem = card.find("div", class_=re.compile(r"_h3_"))
+    if name_elem:
+        a = name_elem.find("a")
+        if a:
+            comment["comment_user_name"] = a.get_text(strip=True)
+            href = a.get("href", "")
+            uid_match = re.search(r"/u/(\d+)", href)
+            comment["comment_user_id"] = uid_match.group(1) if uid_match else ""
+    if not comment.get("comment_user_name"):
+        # 备选：从 avatar 的 usercard 属性获取
+        avatar = card.find("div", class_="woo-avatar-main")
+        if avatar:
+            comment["comment_user_id"] = avatar.get("usercard", "")
+        comment.setdefault("comment_user_name", "")
+        comment.setdefault("comment_user_id", "")
+
+    # 2. 提取评论时间和评论ID（从时间链接的URL中提取cid）
+    from_elem = card.find("div", class_=re.compile(r"_from_"))
+    if from_elem:
+        time_link = from_elem.find("a")
+        if time_link:
+            comment["created_at"] = time_link.get_text(strip=True)
+            href = time_link.get("href", "")
+            # 提取 cid 参数作为评论ID
+            cid_match = re.search(r"cid=(\d+)", href)
+            comment["comment_id"] = cid_match.group(1) if cid_match else ""
+            # 提取微博路径中的bid -> mid
+            bid_match = re.search(r"weibo\.com/\d+/(\w+)", href)
+            if bid_match:
+                comment["weibo_mid"] = bid_to_mid(bid_match.group(1))
+    comment.setdefault("comment_id", "")
+    comment.setdefault("created_at", "")
+    comment.setdefault("weibo_mid", "")
+
+    # 3. 提取评论内容
+    # 评论文本在 _wbtext_ 且带 _textImg_ 的 div 中（第一个是评论内容）
+    wbtext_elems = card.find_all("div", class_=re.compile(r"_wbtext_.*_textImg_|_textImg_.*_wbtext_"))
+    if not wbtext_elems:
+        wbtext_elems = card.find_all("div", class_=re.compile(r"_wbtext_"))
+
+    raw_text = ""
+    is_reply = False
+    if wbtext_elems:
+        first_text_elem = wbtext_elems[0]
+        raw_text = first_text_elem.get_text(strip=True)
+
+        # 检查是否是楼中楼回复（文本以"回复@xxx:"开头）
+        if raw_text.startswith("回复"):
+            is_reply = True
+            # 提取"回复@xxx:实际内容"中的实际内容
+            colon_match = re.search(r"[:：]", raw_text[2:])  # 跳过"回复"两字
+            if colon_match:
+                comment["comment_text"] = raw_text[2 + colon_match.end():].strip()
+            else:
+                comment["comment_text"] = raw_text
+        else:
+            comment["comment_text"] = raw_text
+    comment.setdefault("comment_text", "")
+
+    # 4. 提取被回复的评论（楼中楼场景）和原微博内容
+    repeat_box = card.find("div", class_=re.compile(r"_repeatbox_|_repeatbgbox_"))
+    comment["reply_comment_text"] = None
+    comment["reply_comment_user"] = None
+    comment["weibo_text"] = ""
+
+    if repeat_box:
+        # 检查是否有楼中楼的被回复评论
+        reply_comment_elem = repeat_box.find("div", class_=re.compile(r"_replyComment_"))
+        if reply_comment_elem:
+            # 被回复者昵称
+            reply_name = reply_comment_elem.find("span", class_=re.compile(r"_replyCname_"))
+            if reply_name:
+                name_text = reply_name.get_text(strip=True)
+                # 去掉 @ 和 : 符号
+                name_text = name_text.replace("@", "").rstrip(":：").strip()
+                comment["reply_comment_user"] = name_text
+
+            # 被回复的评论内容（第二个span）
+            spans = reply_comment_elem.find_all("span")
+            if len(spans) >= 2:
+                comment["reply_comment_text"] = spans[-1].get_text(strip=True)
+
+        # 原微博内容（在引用卡片中）
+        weibo_text_elem = repeat_box.find("div", class_=re.compile(r"_messText_|_text_3pz7a"))
+        if weibo_text_elem:
+            comment["weibo_text"] = weibo_text_elem.get_text(strip=True)
+        else:
+            # 备选：找 feed-card-repost 中的文本
+            feed_card = repeat_box.find("div", class_="feed-card-repost")
+            if feed_card:
+                text_div = feed_card.find("div", class_=re.compile(r"_text_|_cut"))
+                if text_div:
+                    comment["weibo_text"] = text_div.get_text(strip=True)
+
+    return comment
+
+
 def parse_follow_list(html):
     """
     从关注列表页面解析关注用户信息。
