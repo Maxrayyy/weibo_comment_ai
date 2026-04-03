@@ -1,0 +1,63 @@
+services:
+  # 好友圈自动评论（Selenium抓取）
+  weibo-friend-group:
+    build: .
+    container_name: weibo-friend-group
+    command: python run_friend_group.py
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - DOCKER_ENV=1
+    restart: unless-stopped
+    shm_size: "512m"
+
+  # 自动回复评论（Selenium抓取）
+  weibo-reply:
+    build: .
+    container_name: weibo-reply
+    command: python run_reply.py
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - DOCKER_ENV=1
+    restart: unless-stopped
+    shm_size: "512m"
+
+  # 超话签到/发帖/评论（Selenium + API）
+  weibo-chaohua:
+    build: .
+    container_name: weibo-chaohua
+    command: python run_chaohua.py
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - DOCKER_ENV=1
+    restart: unless-stopped
+    shm_size: "512m"
+
+  # 时间线评论（纯API，无Selenium）
+  weibo-timeline:
+    build: .
+    container_name: weibo-timeline
+    command: python main.py
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      - DOCKER_ENV=1
+    restart: unless-stopped
