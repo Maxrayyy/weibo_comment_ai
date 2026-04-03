@@ -16,6 +16,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 import random
 
+from webdriver_manager.chrome import ChromeDriverManager
+
 from src.auth.login_manager import apply_cookies, load_cookies, WEIBO_HOME_URL
 from src.scraper.parser import parse_weibo_cards, parse_group_weibo_cards, parse_follow_list
 from src.utils.logger import logger
@@ -35,14 +37,10 @@ class WeiboScraper:
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-blink-features=AutomationControlled")
         options.add_argument("--window-size=1920,1080")
-        options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+        options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
-        chromedriver_path = os.path.join(
-            os.path.expanduser("~"), ".wdm", "drivers", "chromedriver",
-            "win64", "146.0.7680.165", "chromedriver-win32", "chromedriver.exe"
-        )
-        service = Service(chromedriver_path)
+        service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service, options=options)
         # 更全面的反检测注入
         self.driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {

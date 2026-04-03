@@ -15,12 +15,9 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-from src.utils.logger import logger
+from webdriver_manager.chrome import ChromeDriverManager
 
-CHROMEDRIVER_PATH = os.path.join(
-    os.path.expanduser("~"), ".wdm", "drivers", "chromedriver",
-    "win64", "146.0.7680.165", "chromedriver-win32", "chromedriver.exe"
-)
+from src.utils.logger import logger
 
 COOKIE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -41,7 +38,7 @@ def _create_driver(headless=False):
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
-    service = Service(CHROMEDRIVER_PATH)
+    service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
     # 移除webdriver特征
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
@@ -150,5 +147,9 @@ def get_valid_cookies():
                 logger.warning("本地Cookie已过期，需要重新登录")
         finally:
             driver.quit()
+
+    if os.environ.get("DOCKER_ENV") == "1":
+        logger.error("Docker环境下无法手动登录，请在本地登录后将 data/cookies.json 挂载到容器")
+        return None
 
     return manual_login()

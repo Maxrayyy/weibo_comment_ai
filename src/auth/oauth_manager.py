@@ -17,13 +17,10 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
+from webdriver_manager.chrome import ChromeDriverManager
+
 from src.utils.config_loader import config
 from src.utils.logger import logger
-
-CHROMEDRIVER_PATH = os.path.join(
-    os.path.expanduser("~"), ".wdm", "drivers", "chromedriver",
-    "win64", "146.0.7680.165", "chromedriver-win32", "chromedriver.exe"
-)
 
 TOKEN_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -78,7 +75,7 @@ def _get_authorization_code():
     options = Options()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    service = Service(CHROMEDRIVER_PATH)
+    service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
 
     try:
@@ -159,6 +156,10 @@ def get_valid_token():
         logger.warning("本地token验证失败，需要重新授权")
 
     # 重新授权
+    if os.environ.get("DOCKER_ENV") == "1":
+        logger.error("Docker环境下无法进行OAuth授权，请在本地授权后将 data/oauth_token.json 挂载到容器")
+        return None
+
     logger.info("开始OAuth2授权流程...")
     code = _get_authorization_code()
     if not code:
