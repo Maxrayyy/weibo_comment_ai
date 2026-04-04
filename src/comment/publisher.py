@@ -73,6 +73,9 @@ def publish_comment(driver, weibo_mid, comment_text):
             if "id" in body:
                 logger.info(f"评论发布成功！微博ID: {weibo_mid}, 评论ID: {body['id']}")
                 return body
+            elif body.get("ok") == 1:
+                logger.info(f"评论发布成功！微博ID: {weibo_mid}, msg: {body.get('msg', '')}")
+                return body
             else:
                 error_code = body.get("error_code", body.get("errno", "未知"))
                 error_msg = body.get("error", body.get("msg", "未知错误"))

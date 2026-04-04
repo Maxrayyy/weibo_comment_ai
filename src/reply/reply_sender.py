@@ -66,6 +66,9 @@ def send_reply(driver, weibo_mid, comment_id, reply_text):
             if "id" in body:
                 logger.info(f"回复发送成功！评论ID: {comment_id}, 回复ID: {body['id']}")
                 return body
+            elif body.get("ok") == 1:
+                logger.info(f"回复发送成功！评论ID: {comment_id}, msg: {body.get('msg', '')}")
+                return body
             else:
                 error_code = body.get("error_code", body.get("errno", "未知"))
                 error_msg = body.get("error", body.get("msg", "未知错误"))
