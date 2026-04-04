@@ -86,10 +86,14 @@ class ReplyBot:
                 return
 
             # 过滤
+            reply_blacklist = config.reply_blacklist
             new_comments = []
             for c in comments:
                 # 跳过自己的评论
                 if c["comment_user_id"] == self.my_uid:
+                    continue
+                # 跳过黑名单用户
+                if c["comment_user_id"] in reply_blacklist:
                     continue
                 # 跳过已回复的
                 if record_store.is_replied(c["comment_id"]):

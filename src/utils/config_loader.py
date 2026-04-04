@@ -209,6 +209,10 @@ class Config:
     def reply_prompt_name(self):
         return self._reply_config().get("prompt", "weibo_reply")
 
+    @property
+    def reply_blacklist(self):
+        return [str(uid) for uid in self._reply_config().get("blacklist", [])]
+
     # --- 超话配置 ---
     @property
     def chaohua_enabled(self):

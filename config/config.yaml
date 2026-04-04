@@ -65,6 +65,9 @@ reply:
   reply_delay_min: 20                # 回复前延迟最小（秒）
   reply_delay_max: 60               # 回复前延迟最大（秒）
   prompt: "weibo_reply"             # 回复使用的prompt模板
+  blacklist:                         # 不自动回复的用户UID列表
+    - 5606716867                     # 吃瓜罗伯特
+    - 5762999670
 
 # 超话功能配置（基于PC Cookie，无需手机抓包）
 chaohua:
