@@ -12,36 +12,23 @@ from src.utils.logger import logger
 COMMENT_REPLY_URL = "https://www.weibo.com/ajax/comments/reply"
 
 
-def send_reply(driver, weibo_mid, comment_id, reply_text, root_comment_id=None, reply_user_name=None):
+def send_reply(driver, weibo_mid, comment_id, reply_text, **_kwargs):
     """
     通过微博网页AJAX接口回复指定评论。
 
     参数：
         driver: Selenium WebDriver 实例（需已登录微博）
         weibo_mid: 微博ID
-        comment_id: 要回复的评论ID
+        comment_id: 要回复的评论ID（无论根评论还是楼中楼，直接传目标评论ID）
         reply_text: 回复内容
-        root_comment_id: 楼中楼场景下的根评论ID（可选，不传则视为直接回复根评论）
-        reply_user_name: 楼中楼场景下被回复者昵称（可选，用于添加@前缀）
 
     返回：
         成功返回API响应dict，失败返回None
     """
     try:
-        # 楼中楼回复：cid=根评论ID, reply_id=被回复的具体评论ID，内容前加"回复@用户名:"
-        if root_comment_id:
-            cid = str(root_comment_id)
-            reply_id = str(comment_id)
-            if reply_user_name:
-                reply_text = f"回复@{reply_user_name}:{reply_text}"
-        else:
-            cid = str(comment_id)
-            reply_id = str(comment_id)
-
         safe_comment = _js_escape(reply_text)
         safe_mid = _js_escape(str(weibo_mid))
-        safe_cid = _js_escape(cid)
-        safe_reply_id = _js_escape(reply_id)
+        safe_cid = _js_escape(str(comment_id))
 
         result = driver.execute_script(f"""
             try {{
@@ -49,11 +36,13 @@ def send_reply(driver, weibo_mid, comment_id, reply_text, root_comment_id=None, 
                 xhr.open('POST', '{COMMENT_REPLY_URL}', false);
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.setRequestHeader('client-version', '3.0.0');
+                xhr.setRequestHeader('server-version', 'v2026.04.03.1');
                 var xsrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
                 if (xsrf) {{
                     xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(xsrf[1]));
                 }}
-                var params = 'id={safe_mid}&cid={safe_cid}&reply_id={safe_reply_id}&comment=' + encodeURIComponent('{safe_comment}');
+                var params = 'id={safe_mid}&cid={safe_cid}&comment=' + encodeURIComponent('{safe_comment}') + '&pic_id=&is_repost=0&comment_ori=0&is_comment=0';
                 xhr.send(params);
                 return JSON.stringify({{status: xhr.status, body: xhr.responseText}});
             }} catch(e) {{

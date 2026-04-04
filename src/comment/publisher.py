@@ -42,6 +42,8 @@ def publish_comment(driver, weibo_mid, comment_text):
                 xhr.open('POST', '{COMMENT_CREATE_URL}', false);
                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.setRequestHeader('client-version', '3.0.0');
+                xhr.setRequestHeader('server-version', 'v2026.04.03.1');
                 // 从Cookie中读取XSRF-TOKEN
                 var xsrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
                 if (xsrf) {{
