@@ -152,7 +152,11 @@ class ReplyBot:
         time.sleep(delay)
 
         # 发送回复（通过浏览器AJAX，不消耗OAuth API配额）
-        result = send_reply(self.scraper.driver, weibo_mid, cid, reply_text)
+        result = send_reply(
+            self.scraper.driver, weibo_mid, cid, reply_text,
+            root_comment_id=root_comment_id,
+            reply_user_name=comment_user if root_comment_id else None,
+        )
         if result:
             record_store.add_reply_record(
                 comment_id=cid,
