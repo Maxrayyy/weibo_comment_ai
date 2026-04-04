@@ -37,9 +37,15 @@
    - docs: 文档
    - chore: 杂项
 
+## 部署环境
+
+- **生产服务器**：Ubuntu @ 150.158.112.53，SSH密钥 `C:\Users\zhidong_huang\weibo_douzi.pem`
+- **部署方式**：Docker Compose，4个服务独立容器（friend-group、reply、chaohua、timeline）
+- **本地开发**：Windows 11，代码兼容 Windows/Linux 双平台运行
+
 ## 项目结构
 
 - 语言：Python
-- 入口文件：`main.py`（时间线模式）、`run_friend_group.py`（好友圈模式）
+- 入口文件：`main.py`（时间线模式）、`run_friend_group.py`（好友圈模式）、`run_reply.py`（回复模式）、`run_chaohua.py`（超话模式）
 - 配置：`config/config.yaml` + `config/prompts.yaml`
 - 环境变量：`.env`
