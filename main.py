@@ -8,6 +8,7 @@ import random
 import signal
 import sys
 import time
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -31,10 +32,13 @@ from src.scheduler.task_scheduler import TaskScheduler
 class TimelineBot:
     """时间线自动评论机器人（API模式）"""
 
+    RATE_LIMIT_COOLDOWN_MINUTES = 10
+
     def __init__(self):
         self.my_uid = None
         self.target_uids = []
         self.rip = None
+        self._rate_limit_until = None
 
     def init(self):
         """初始化：IP → Cookie → OAuth → 目标用户"""
@@ -77,6 +81,9 @@ class TimelineBot:
 
     def poll_and_comment(self):
         """一次轮询：API抓取 → 过滤 → 评论"""
+        if self._rate_limit_until and datetime.now() < self._rate_limit_until:
+            logger.info(f"频率限制冷却中，{self._rate_limit_until.strftime('%H:%M:%S')} 后恢复")
+            return
         try:
             all_weibos = fetch_friends_weibos(count=70, page=2)
             logger.info(f"API抓取到 {len(all_weibos)} 条微博")
@@ -109,7 +116,8 @@ class TimelineBot:
                 try:
                     self._comment_on_weibo(weibo)
                 except RateLimitError:
-                    logger.warning("触发频率限制，本轮停止，等待下一轮")
+                    self._rate_limit_until = datetime.now() + timedelta(minutes=self.RATE_LIMIT_COOLDOWN_MINUTES)
+                    logger.warning(f"触发频率限制，冷却 {self.RATE_LIMIT_COOLDOWN_MINUTES} 分钟")
                     break
                 except Exception as e:
                     logger.error(f"评论出错 (mid={weibo.get('mid', '?')}): {e}")

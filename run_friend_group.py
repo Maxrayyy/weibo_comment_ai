@@ -9,6 +9,7 @@ import random
 import signal
 import sys
 import time
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -32,10 +33,14 @@ from src.scheduler.task_scheduler import TaskScheduler
 class FriendGroupBot:
     """好友圈自动评论机器人（Selenium模式）"""
 
+    # 频率限制冷却时间（分钟）
+    RATE_LIMIT_COOLDOWN_MINUTES = 10
+
     def __init__(self):
         self.my_uid = None
         self.rip = None
         self.scraper = None
+        self._rate_limit_until = None
 
     def init(self):
         """初始化：IP → Cookie → OAuth → Selenium浏览器"""
@@ -78,6 +83,10 @@ class FriendGroupBot:
 
     def poll_and_comment(self):
         """一次轮询：Selenium抓取好友圈 → 过滤 → 评论"""
+        # 频率限制冷却检查
+        if self._rate_limit_until and datetime.now() < self._rate_limit_until:
+            logger.info(f"[好友圈] 频率限制冷却中，{self._rate_limit_until.strftime('%H:%M:%S')} 后恢复")
+            return
         try:
             gid = config.friend_group_gid
             scroll_times = config.friend_group_scroll_times
@@ -114,7 +123,8 @@ class FriendGroupBot:
                 try:
                     self._comment_on_weibo(weibo)
                 except RateLimitError:
-                    logger.warning("[好友圈] 触发频率限制，本轮停止，等待下一轮")
+                    self._rate_limit_until = datetime.now() + timedelta(minutes=self.RATE_LIMIT_COOLDOWN_MINUTES)
+                    logger.warning(f"[好友圈] 触发频率限制，冷却 {self.RATE_LIMIT_COOLDOWN_MINUTES} 分钟")
                     break
                 except Exception as e:
                     logger.error(f"[好友圈] 评论出错 (mid={weibo.get('mid', '?')}): {e}")

@@ -10,6 +10,7 @@ import random
 import signal
 import sys
 import time
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -35,10 +36,13 @@ from src.scheduler.task_scheduler import TaskScheduler
 class ReplyBot:
     """自动回复评论机器人"""
 
+    RATE_LIMIT_COOLDOWN_MINUTES = 10
+
     def __init__(self):
         self.my_uid = None
         self.rip = None
         self.scraper = None
+        self._rate_limit_until = None
 
     def init(self):
         """初始化：IP → Cookie → OAuth → Selenium"""
@@ -79,6 +83,9 @@ class ReplyBot:
 
     def poll_and_reply(self):
         """一次轮询：获取新评论 → 过滤 → 回复"""
+        if self._rate_limit_until and datetime.now() < self._rate_limit_until:
+            logger.info(f"[回复] 频率限制冷却中，{self._rate_limit_until.strftime('%H:%M:%S')} 后恢复")
+            return
         try:
             comments = fetch_comments_to_me(driver=self.scraper.driver)
 
@@ -112,7 +119,8 @@ class ReplyBot:
                 try:
                     self._reply_to_comment(c)
                 except RateLimitError:
-                    logger.warning("[回复] 触发频率限制，本轮停止，等待下一轮")
+                    self._rate_limit_until = datetime.now() + timedelta(minutes=self.RATE_LIMIT_COOLDOWN_MINUTES)
+                    logger.warning(f"[回复] 触发频率限制，冷却 {self.RATE_LIMIT_COOLDOWN_MINUTES} 分钟")
                     break
                 except Exception as e:
                     logger.error(f"回复出错 (cid={c['comment_id']}): {e}")
