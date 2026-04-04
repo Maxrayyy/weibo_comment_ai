@@ -87,6 +87,15 @@ class ReplyBot:
 
             # 过滤
             reply_blacklist = config.reply_blacklist
+
+            # 收集所有楼中楼回复的根评论ID，这些根评论不需要再回复
+            # （有楼中楼说明根评论已经回复过了，只需回复最新的楼中楼）
+            root_ids_from_sub_replies = set()
+            for c in comments:
+                root_id = c.get("root_comment_id")
+                if root_id:
+                    root_ids_from_sub_replies.add(root_id)
+
             new_comments = []
             for c in comments:
                 # 跳过自己的评论
@@ -100,6 +109,9 @@ class ReplyBot:
                     continue
                 # 跳过空评论
                 if not c["comment_text"].strip():
+                    continue
+                # 跳过已有楼中楼回复的根评论（只回复最新的楼中楼）
+                if not c.get("root_comment_id") and c["comment_id"] in root_ids_from_sub_replies:
                     continue
                 new_comments.append(c)
 
