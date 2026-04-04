@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# 使用清华 Debian 镜像源加速
+RUN sed -i 's|http://deb.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+
 # 安装 Google Chrome 和必要的系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
@@ -16,7 +19,7 @@ WORKDIR /app
 
 # 先安装 Python 依赖（利用 Docker 缓存）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # 预下载 ChromeDriver（构建时完成，运行时不再需要网络下载）
 RUN python -c "from webdriver_manager.chrome import ChromeDriverManager; ChromeDriverManager().install()"
