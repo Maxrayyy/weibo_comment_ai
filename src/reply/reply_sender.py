@@ -12,15 +12,18 @@ from src.utils.logger import logger
 COMMENT_REPLY_URL = "https://www.weibo.com/ajax/comments/reply"
 
 
-def send_reply(driver, weibo_mid, comment_id, reply_text, **_kwargs):
+def send_reply(driver, weibo_mid, comment_id, reply_text, root_comment_id=None, **_kwargs):
     """
     通过微博网页AJAX接口回复指定评论。
 
     参数：
         driver: Selenium WebDriver 实例（需已登录微博）
         weibo_mid: 微博ID
-        comment_id: 要回复的评论ID（无论根评论还是楼中楼，直接传目标评论ID）
+        comment_id: 要回复的评论ID
         reply_text: 回复内容
+        root_comment_id: 楼中楼时的根评论ID（可选）。
+            传入时：cid=root_comment_id, reply_id=comment_id（回复子评论）
+            不传时：cid=comment_id（回复根评论）
 
     返回：
         成功返回API响应dict，失败返回None
@@ -28,7 +31,15 @@ def send_reply(driver, weibo_mid, comment_id, reply_text, **_kwargs):
     try:
         safe_comment = _js_escape(reply_text)
         safe_mid = _js_escape(str(weibo_mid))
-        safe_cid = _js_escape(str(comment_id))
+
+        # 楼中楼：cid=根评论ID, reply_id=子评论ID
+        # 直接评论：cid=评论ID, reply_id=评论ID
+        if root_comment_id:
+            safe_cid = _js_escape(str(root_comment_id))
+            safe_reply_id = _js_escape(str(comment_id))
+        else:
+            safe_cid = _js_escape(str(comment_id))
+            safe_reply_id = safe_cid
 
         result = driver.execute_script(f"""
             try {{
@@ -42,7 +53,7 @@ def send_reply(driver, weibo_mid, comment_id, reply_text, **_kwargs):
                 if (xsrf) {{
                     xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(xsrf[1]));
                 }}
-                var params = 'id={safe_mid}&cid={safe_cid}&comment=' + encodeURIComponent('{safe_comment}') + '&pic_id=&is_repost=0&comment_ori=0&is_comment=0';
+                var params = 'id={safe_mid}&cid={safe_cid}&reply_id={safe_reply_id}&comment=' + encodeURIComponent('{safe_comment}') + '&pic_id=&is_repost=0&comment_ori=0&is_comment=0';
                 xhr.send(params);
                 return JSON.stringify({{status: xhr.status, body: xhr.responseText}});
             }} catch(e) {{
