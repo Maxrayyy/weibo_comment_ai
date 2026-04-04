@@ -7,6 +7,7 @@
 import requests
 
 from src.auth.oauth_manager import get_valid_token
+from src.comment.publisher import RateLimitError
 from src.utils.logger import logger
 
 COMMENT_REPLY_URL = "https://api.weibo.com/2/comments/reply.json"
@@ -52,8 +53,9 @@ def send_reply(weibo_mid, comment_id, reply_text, rip):
             error_msg = result.get("error", "未知错误")
             logger.error(f"回复发送失败 - 错误码: {error_code}, 信息: {error_msg}")
 
-            if error_code == 10023:
-                logger.warning("触发频率限制，请稍后再试")
+            if error_code in (10023, 10024):
+                logger.warning("触发频率限制，停止本轮回复，等待下一轮")
+                raise RateLimitError(f"回复频率限制: {error_msg}")
             elif error_code == 10014:
                 logger.warning("回复内容不合规")
             elif error_code in (21327, 21332):
@@ -61,6 +63,8 @@ def send_reply(weibo_mid, comment_id, reply_text, rip):
 
             return None
 
+    except RateLimitError:
+        raise
     except requests.Timeout:
         logger.error(f"回复发送超时，评论ID: {comment_id}")
         return None

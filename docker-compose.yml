@@ -12,6 +12,7 @@ services:
       - .env
     environment:
       - DOCKER_ENV=1
+      - SERVICE_NAME=friend-group
     restart: unless-stopped
     shm_size: "512m"
 
@@ -28,6 +29,7 @@ services:
       - .env
     environment:
       - DOCKER_ENV=1
+      - SERVICE_NAME=reply
     restart: unless-stopped
     shm_size: "512m"
 
@@ -44,6 +46,7 @@ services:
       - .env
     environment:
       - DOCKER_ENV=1
+      - SERVICE_NAME=chaohua
     restart: unless-stopped
     shm_size: "512m"
 
@@ -60,4 +63,5 @@ services:
       - .env
     environment:
       - DOCKER_ENV=1
+      - SERVICE_NAME=timeline
     restart: unless-stopped

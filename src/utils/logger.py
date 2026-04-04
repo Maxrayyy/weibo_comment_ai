@@ -2,7 +2,10 @@ import logging
 import os
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "logs")
-LOG_FILE = os.path.join(LOG_DIR, "app.log")
+
+# 通过环境变量区分服务名，用于生成独立日志文件
+SERVICE_NAME = os.environ.get("SERVICE_NAME", "app")
+LOG_FILE = os.path.join(LOG_DIR, f"{SERVICE_NAME}.log")
 
 
 def setup_logger(name="weibo_comment_ai", level=logging.INFO):

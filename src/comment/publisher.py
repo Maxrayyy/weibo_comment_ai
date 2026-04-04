@@ -13,6 +13,11 @@ from src.utils.logger import logger
 COMMENT_CREATE_URL = "https://api.weibo.com/2/comments/create.json"
 
 
+class RateLimitError(Exception):
+    """触发API频率限制"""
+    pass
+
+
 def publish_comment(weibo_mid, comment_text, rip):
     """
     通过微博API发布评论。
@@ -24,6 +29,8 @@ def publish_comment(weibo_mid, comment_text, rip):
 
     返回：
         成功返回API响应dict，失败返回None
+    raises：
+        RateLimitError: 触发频率限制时抛出，由上层决定是否停止
     """
     access_token = get_valid_token()
     if not access_token:
@@ -49,9 +56,9 @@ def publish_comment(weibo_mid, comment_text, rip):
             error_msg = result.get("error", "未知错误")
             logger.error(f"评论发布失败 - 错误码: {error_code}, 信息: {error_msg}")
 
-            # 特殊错误处理
-            if error_code == 10023:
-                logger.warning("触发频率限制，请稍后再试")
+            if error_code in (10023, 10024):
+                logger.warning("触发频率限制，停止本轮评论，等待下一轮")
+                raise RateLimitError(f"评论频率限制: {error_msg}")
             elif error_code == 10014:
                 logger.warning("评论内容不合规")
             elif error_code in (21327, 21332):
@@ -59,6 +66,8 @@ def publish_comment(weibo_mid, comment_text, rip):
 
             return None
 
+    except RateLimitError:
+        raise
     except requests.Timeout:
         logger.error(f"评论发布超时，微博ID: {weibo_mid}")
         return None

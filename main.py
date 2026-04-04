@@ -23,7 +23,7 @@ from src.auth.login_manager import get_valid_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
 from src.scraper.api_fetcher import fetch_friends_weibos, fetch_followers
 from src.comment.ai_generator import generate_comment
-from src.comment.publisher import publish_comment
+from src.comment.publisher import publish_comment, RateLimitError
 from src.storage.record_store import record_store
 from src.scheduler.task_scheduler import TaskScheduler
 
@@ -108,6 +108,9 @@ class TimelineBot:
                     break
                 try:
                     self._comment_on_weibo(weibo)
+                except RateLimitError:
+                    logger.warning("触发频率限制，本轮停止，等待下一轮")
+                    break
                 except Exception as e:
                     logger.error(f"评论出错 (mid={weibo.get('mid', '?')}): {e}")
 

@@ -27,6 +27,7 @@ from src.scraper.weibo_scraper import WeiboScraper
 from src.reply.reply_fetcher import fetch_comments_to_me
 from src.reply.reply_generator import generate_reply
 from src.reply.reply_sender import send_reply
+from src.comment.publisher import RateLimitError
 from src.storage.record_store import record_store
 from src.scheduler.task_scheduler import TaskScheduler
 
@@ -110,6 +111,9 @@ class ReplyBot:
                     break
                 try:
                     self._reply_to_comment(c)
+                except RateLimitError:
+                    logger.warning("[回复] 触发频率限制，本轮停止，等待下一轮")
+                    break
                 except Exception as e:
                     logger.error(f"回复出错 (cid={c['comment_id']}): {e}")
 

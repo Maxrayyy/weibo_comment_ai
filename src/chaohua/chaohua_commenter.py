@@ -10,7 +10,7 @@ import time
 
 from src.chaohua.chaohua_client import ChaohuaClient
 from src.comment.ai_generator import generate_comment
-from src.comment.publisher import publish_comment
+from src.comment.publisher import publish_comment, RateLimitError
 from src.storage.record_store import record_store
 from src.utils.config_loader import config
 from src.utils.logger import logger
@@ -76,7 +76,11 @@ class ChaohuaCommenter:
                 logger.info(f"等待 {delay}s 后评论超话微博 {mid}...")
                 time.sleep(delay)
 
-                result = publish_comment(mid, comment, self.rip)
+                try:
+                    result = publish_comment(mid, comment, self.rip)
+                except RateLimitError:
+                    logger.warning("[超话] 触发频率限制，本轮停止，等待下一轮")
+                    return total_success
                 if result:
                     record_store.add_record(mid, comment, weibo.get("user_name", ""), comment_id=result.get("id"))
                     record_store.increment_chaohua_comment_count()
