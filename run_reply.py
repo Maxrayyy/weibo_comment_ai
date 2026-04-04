@@ -41,6 +41,7 @@ class ReplyBot:
         self.my_uid = None
         self.scraper = None
         self._rate_limit_until = None
+        self._shutdown = False
 
     def init(self):
         """初始化：IP → Cookie → OAuth → Selenium"""
@@ -162,10 +163,14 @@ class ReplyBot:
             logger.warning(f"回复生成失败，跳过 cid={cid}")
             return
 
-        # 随机延迟
+        # 随机延迟（支持优雅退出）
         delay = random.randint(config.reply_delay_min, config.reply_delay_max)
         logger.info(f"  等待 {delay}s → {reply_text}")
-        time.sleep(delay)
+        for _ in range(delay):
+            if self._shutdown:
+                logger.info("收到退出信号，跳过发送")
+                return
+            time.sleep(1)
 
         # 发送回复（通过浏览器AJAX，不消耗OAuth API配额）
         result = send_reply(
@@ -186,6 +191,7 @@ class ReplyBot:
             logger.warning(f"  ✗ 回复失败")
 
     def cleanup(self):
+        self._shutdown = True
         if self.scraper:
             self.scraper.stop()
         logger.info("资源已清理")
