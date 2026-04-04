@@ -26,6 +26,7 @@ services:
       - ./data:/app/data
       - ./config:/app/config
       - ./logs:/app/logs
+      - ./test:/app/test
     env_file:
       - .env
     environment:
