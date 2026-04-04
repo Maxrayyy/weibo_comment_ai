@@ -213,6 +213,78 @@ def _extract_weibo_from_article(article):
     return weibo
 
 
+# ====== 好友圈 AJAX API JSON 解析 ======
+
+def parse_group_timeline_api(data):
+    """
+    解析好友圈 AJAX API 返回的JSON数据。
+    API: /ajax/feed/groupstimeline?list_id={gid}&refresh=4&fast_refresh=1&count=25
+    返回微博列表，格式同 parse_weibo_cards。
+    """
+    weibos = []
+    statuses = data.get("statuses", [])
+
+    for status in statuses:
+        try:
+            weibo = _extract_weibo_from_status(status)
+            if weibo and weibo.get("mid") and weibo.get("text"):
+                weibos.append(weibo)
+        except Exception as e:
+            logger.debug(f"解析API微博数据失败: {e}")
+            continue
+
+    return weibos
+
+
+def _extract_weibo_from_status(status):
+    """从API返回的单条微博status对象中提取信息"""
+    weibo = {}
+
+    # 微博ID
+    weibo["mid"] = str(status.get("mid", "") or status.get("id", ""))
+
+    # 用户信息
+    user = status.get("user", {})
+    weibo["user_id"] = str(user.get("id", ""))
+    weibo["user_name"] = user.get("screen_name", "") or user.get("name", "")
+
+    # 正文（API返回HTML格式的text_raw或text）
+    # text_raw 是纯文本，text 是带HTML标签的
+    weibo["text"] = status.get("text_raw", "") or ""
+    if not weibo["text"]:
+        # 如果没有text_raw，从HTML text中提取纯文本
+        html_text = status.get("text", "")
+        if html_text:
+            from bs4 import BeautifulSoup as BS
+            weibo["text"] = BS(html_text, "html.parser").get_text(strip=True)
+
+    # 是否转发
+    weibo["is_repost"] = "retweeted_status" in status
+
+    # 发布时间
+    weibo["created_at"] = status.get("created_at", "")
+
+    # 图片URL：从pic_infos或pics中提取第一张
+    weibo["pic_url"] = ""
+    pic_ids = status.get("pic_ids", [])
+    pic_infos = status.get("pic_infos", {})
+    if pic_ids and pic_infos:
+        first_pic_id = pic_ids[0]
+        first_pic = pic_infos.get(first_pic_id, {})
+        # 优先取 mw690 尺寸
+        for size in ("mw690", "bmiddle", "large", "original"):
+            if size in first_pic:
+                weibo["pic_url"] = first_pic[size].get("url", "")
+                break
+    elif not weibo["pic_url"]:
+        # 备选：pics数组
+        pics = status.get("pics", [])
+        if pics:
+            weibo["pic_url"] = pics[0].get("url", "")
+
+    return weibo
+
+
 # ====== 评论收件箱页面解析 ======
 
 def parse_comment_inbox(html):

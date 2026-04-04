@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import random
 
 from src.auth.login_manager import apply_cookies, load_cookies, WEIBO_HOME_URL
-from src.scraper.parser import parse_weibo_cards, parse_group_weibo_cards, parse_follow_list
+from src.scraper.parser import parse_weibo_cards, parse_group_weibo_cards, parse_group_timeline_api, parse_follow_list
 from src.utils.logger import logger
 
 
@@ -190,14 +190,70 @@ class WeiboScraper:
     def fetch_group_timeline(self, gid, scroll_times=3):
         """
         抓取好友圈分组的微博feed。
+        优先使用AJAX API直接获取JSON数据（解决长时间运行浏览器的SPA缓存问题），
+        失败时回退到HTML解析。
         gid: 好友圈分组ID（URL中的gid参数）
-        scroll_times: 向下滚动的次数
+        scroll_times: 向下滚动的次数（仅HTML回退时使用）
         返回微博列表。
         """
-        url = f"https://www.weibo.com/mygroups?gid={gid}"
         logger.info(f"正在抓取好友圈 (gid={gid})...")
 
-        # 清除缓存，确保获取最新内容
+        # 方案一：AJAX API 直接调用
+        weibos = self._fetch_group_via_api(gid)
+        if weibos:
+            logger.info(f"好友圈API抓取到 {len(weibos)} 条微博")
+            for w in weibos:
+                logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
+            return weibos
+
+        # 方案二：回退到HTML解析
+        logger.warning("API调用失败，回退到HTML解析模式")
+        return self._fetch_group_via_html(gid, scroll_times)
+
+    def _fetch_group_via_api(self, gid):
+        """通过AJAX API获取好友圈微博数据"""
+        try:
+            # 确保浏览器在微博域下（cookie才能生效）
+            current_url = self.driver.current_url
+            if "weibo.com" not in current_url:
+                self.driver.get("https://weibo.com")
+                time.sleep(2)
+
+            # 使用浏览器内置fetch调用API，自动携带cookie
+            api_url = f"https://www.weibo.com/ajax/feed/groupstimeline?list_id={gid}&refresh=4&fast_refresh=1&count=25"
+            result = self.driver.execute_script(f"""
+                try {{
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', '{api_url}', false);
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                    xhr.send();
+                    if (xhr.status === 200) {{
+                        return xhr.responseText;
+                    }} else {{
+                        return 'ERROR:' + xhr.status;
+                    }}
+                }} catch(e) {{
+                    return 'ERROR:' + e.message;
+                }}
+            """)
+
+            if not result or result.startswith("ERROR:"):
+                logger.warning(f"好友圈API请求失败: {result}")
+                return []
+
+            import json
+            data = json.loads(result)
+            weibos = parse_group_timeline_api(data)
+            return weibos
+
+        except Exception as e:
+            logger.warning(f"好友圈API调用异常: {e}")
+            return []
+
+    def _fetch_group_via_html(self, gid, scroll_times):
+        """通过HTML解析获取好友圈微博（回退方案）"""
+        url = f"https://www.weibo.com/mygroups?gid={gid}"
+
         try:
             self.driver.execute_cdp_cmd("Network.clearBrowserCache", {})
         except Exception:
@@ -206,12 +262,9 @@ class WeiboScraper:
         if not self._safe_get(url):
             return []
 
-        # 强制刷新页面，避免SPA服务端渲染缓存
         self.driver.refresh()
-        # 等待足够时间让 Vue 应用激活并通过 API 加载最新 feed
         time.sleep(8)
 
-        # 滚动加载更多内容
         for i in range(scroll_times):
             try:
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -222,7 +275,7 @@ class WeiboScraper:
 
         page_source = self.driver.page_source
         weibos = parse_group_weibo_cards(page_source)
-        logger.info(f"好友圈抓取到 {len(weibos)} 条微博")
+        logger.info(f"好友圈HTML抓取到 {len(weibos)} 条微博")
         for w in weibos:
             logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
         return weibos
