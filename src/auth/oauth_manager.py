@@ -17,8 +17,6 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-from webdriver_manager.chrome import ChromeDriverManager
-
 from src.utils.config_loader import config
 from src.utils.logger import logger
 
@@ -75,7 +73,8 @@ def _get_authorization_code():
     options = Options()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    service = Service(ChromeDriverManager().install())
+    from src.utils.driver_helper import get_chrome_service
+    service = get_chrome_service()
     driver = webdriver.Chrome(service=service, options=options)
 
     try:

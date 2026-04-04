@@ -15,8 +15,6 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-from webdriver_manager.chrome import ChromeDriverManager
-
 from src.utils.logger import logger
 
 COOKIE_PATH = os.path.join(
@@ -38,7 +36,8 @@ def _create_driver(headless=False):
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
-    service = Service(ChromeDriverManager().install())
+    from src.utils.driver_helper import get_chrome_service
+    service = get_chrome_service()
     driver = webdriver.Chrome(service=service, options=options)
     # 移除webdriver特征
     driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
