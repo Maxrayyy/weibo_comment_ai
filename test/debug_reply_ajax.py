@@ -198,32 +198,21 @@ def main():
         logger.info(f"输入结果: {typed}")
         time.sleep(1)
 
-        # 找到发送按钮并点击
+        # 找到发送按钮并点击（woo-button-flat woo-button-primary）
         sent = driver.execute_script("""
-            // 找发送/回复提交按钮
-            var buttons = document.querySelectorAll('button, [role="button"], a');
+            var buttons = document.querySelectorAll('button');
             for (var btn of buttons) {
-                var text = btn.textContent.trim();
-                if ((text === '回复' || text === '发送' || text === '评论') && btn.offsetParent !== null) {
-                    // 检查是否在回复面板中
-                    var parent = btn.closest('[class*="compose"], [class*="reply"], [class*="editor"]');
-                    if (parent || btn.className.includes('submit') || btn.className.includes('send')) {
-                        btn.click();
-                        return 'clicked submit: ' + text + ' class=' + btn.className.substring(0, 100);
-                    }
+                if (btn.className.includes('woo-button-flat') &&
+                    btn.className.includes('woo-button-primary') &&
+                    btn.offsetParent !== null) {
+                    btn.click();
+                    return 'clicked: ' + btn.textContent.trim() + ' class=' + btn.className.substring(0, 120);
                 }
             }
-            // 备选：找所有包含"回复"的可点击元素
-            var allBtns = [];
-            for (var btn of buttons) {
-                if (btn.offsetParent !== null && btn.textContent.trim().length < 10) {
-                    allBtns.push(btn.textContent.trim() + ' | ' + btn.className.substring(0, 60));
-                }
-            }
-            return 'not found, visible buttons: ' + allBtns.join('; ');
+            return 'not found';
         """)
         logger.info(f"发送结果: {sent}")
-        time.sleep(3)
+        time.sleep(5)
 
         # 检查拦截到的请求
         logger.info("=" * 60)
