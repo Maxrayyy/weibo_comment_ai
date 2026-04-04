@@ -213,9 +213,8 @@ class WeiboScraper:
     def _fetch_group_via_api(self, gid):
         """通过AJAX API获取好友圈微博数据"""
         try:
-            # 确保浏览器在微博域下且页面已加载（cookie才能生效）
-            # 每次都导航到微博首页，确保页面上下文就绪
-            self.driver.get("https://weibo.com")
+            # 确保浏览器在 www.weibo.com 域下（API在www子域，跨域XHR会被拦截）
+            self.driver.get("https://www.weibo.com")
             time.sleep(3)
 
             # 使用浏览器内置fetch调用API，自动携带cookie

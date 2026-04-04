@@ -48,7 +48,7 @@ if cookies:
 
 # 先访问微博主页确保cookie生效
 print("\n=== 1. 确保cookie域生效 ===")
-driver.get("https://weibo.com")
+driver.get("https://www.weibo.com")
 time.sleep(3)
 
 # 调用AJAX API
