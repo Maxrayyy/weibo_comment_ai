@@ -6,16 +6,17 @@ weibo:
 
 # 大模型配置（兼容OpenAI SDK的任意平台）
 llm:
-  # 分析阶段（微博情绪/句式分析，低温度结构化输出）
-  analyze:
+  # 纯文字评论生成（无图片微博使用）
+  text:
+    api_key: "${DEEPSEEK_API_KEY}"
+    base_url: "https://api.deepseek.com"
+    model: "deepseek-chat"
+    max_tokens: 150
+  # 多模态评论生成（有图片微博使用，需支持 image_url）
+  multimodal:
     api_key: "${DASHSCOPE_API_KEY}"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: "qwen3.5-flash"
-  # 生成阶段（评论文本生成，高温度创意输出）
-  generate:
-    api_key: "${DASHSCOPE_API_KEY}"
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    model: "qwen3.5-flash"
+    model: "qwen-vl-plus"
     max_tokens: 150
 # 评论策略配置
 strategy:

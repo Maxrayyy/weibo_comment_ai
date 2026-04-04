@@ -22,6 +22,9 @@ def _extract_first_pic(element):
         # 跳过表情图片（表情域名为 face.t.sinajs.cn 或尺寸很小的图）
         if "face" in src or "emoticon" in src:
             continue
+        # 跳过用户头像（头像路径包含 /avatar/ 或 headicon 或 default_avatar）
+        if "avatar" in src or "headicon" in src or "default" in src:
+            continue
         # 将任意尺寸替换为 mw690（中等偏大，适合模型识别）
         pic_url = re.sub(
             r"(sinaimg\.cn/)(thumbnail|bmiddle|orj360|orj480|thumb150|square|small|mw\d+|large)",

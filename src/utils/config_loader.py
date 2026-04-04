@@ -51,38 +51,42 @@ class Config:
     def redirect_uri(self):
         return self._config["weibo"]["redirect_uri"]
 
-    # --- LLM配置（分析阶段 + 生成阶段） ---
-    def _llm(self, stage):
-        """获取指定阶段的LLM配置"""
-        return self._config.get("llm", {}).get(stage, {})
+    # --- LLM配置（纯文字 + 多模态） ---
+    def _llm(self, mode):
+        """获取指定模式的LLM配置"""
+        return self._config.get("llm", {}).get(mode, {})
 
     @property
-    def analyze_api_key(self):
-        return self._llm("analyze").get("api_key", "")
+    def text_api_key(self):
+        return self._llm("text").get("api_key", "")
 
     @property
-    def analyze_base_url(self):
-        return self._llm("analyze").get("base_url", "")
+    def text_base_url(self):
+        return self._llm("text").get("base_url", "")
 
     @property
-    def analyze_model(self):
-        return self._llm("analyze").get("model", "")
+    def text_model(self):
+        return self._llm("text").get("model", "")
 
     @property
-    def generate_api_key(self):
-        return self._llm("generate").get("api_key", "")
+    def text_max_tokens(self):
+        return self._llm("text").get("max_tokens", 150)
 
     @property
-    def generate_base_url(self):
-        return self._llm("generate").get("base_url", "")
+    def multimodal_api_key(self):
+        return self._llm("multimodal").get("api_key", "")
 
     @property
-    def generate_model(self):
-        return self._llm("generate").get("model", "")
+    def multimodal_base_url(self):
+        return self._llm("multimodal").get("base_url", "")
 
     @property
-    def generate_max_tokens(self):
-        return self._llm("generate").get("max_tokens", 150)
+    def multimodal_model(self):
+        return self._llm("multimodal").get("model", "")
+
+    @property
+    def multimodal_max_tokens(self):
+        return self._llm("multimodal").get("max_tokens", 150)
 
     # --- 策略配置 ---
     @property

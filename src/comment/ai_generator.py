@@ -43,7 +43,7 @@ def _build_messages(weibo_text, pic_url=None):
         avoid_starts = "".join(recent_starts)
         user_prompt += f'\n\n注意：不要和这些已有评论雷同：{avoid_text}。不要用"{avoid_starts}"中的任何字开头。'
 
-    # 构建user content（纯文本或多模态）
+    # 有图片时使用多模态格式，无图片用纯文本
     if pic_url:
         user_content = [
             {"type": "text", "text": user_prompt},
@@ -99,18 +99,29 @@ def generate_comment(weibo_text, pic_url=None, prompt_name=None, max_retries=3):
     返回：
         评论文本字符串，失败返回None
     """
-    client = OpenAI(
-        api_key=config.generate_api_key,
-        base_url=config.generate_base_url,
-    )
+    # 有图片时使用多模态模型，无图片用纯文字模型
+    if pic_url:
+        client = OpenAI(
+            api_key=config.multimodal_api_key,
+            base_url=config.multimodal_base_url,
+        )
+        model = config.multimodal_model
+        max_tokens = config.multimodal_max_tokens
+    else:
+        client = OpenAI(
+            api_key=config.text_api_key,
+            base_url=config.text_base_url,
+        )
+        model = config.text_model
+        max_tokens = config.text_max_tokens
 
     for attempt in range(max_retries):
         try:
             messages = _build_messages(weibo_text, pic_url=pic_url)
             response = client.chat.completions.create(
-                model=config.generate_model,
+                model=model,
                 messages=messages,
-                max_tokens=config.generate_max_tokens,
+                max_tokens=max_tokens,
                 temperature=0.89,
             )
 

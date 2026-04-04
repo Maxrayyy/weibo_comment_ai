@@ -93,17 +93,17 @@ def generate_reply(weibo_text, comment_text, reply_comment_text=None, max_retrie
         回复文本字符串，失败返回None
     """
     client = OpenAI(
-        api_key=config.generate_api_key,
-        base_url=config.generate_base_url,
+        api_key=config.text_api_key,
+        base_url=config.text_base_url,
     )
 
     for attempt in range(max_retries):
         try:
             messages = _build_messages(weibo_text, comment_text, reply_comment_text)
             response = client.chat.completions.create(
-                model=config.generate_model,
+                model=config.text_model,
                 messages=messages,
-                max_tokens=config.generate_max_tokens,
+                max_tokens=config.text_max_tokens,
                 temperature=0.89,
             )
 
