@@ -13,6 +13,7 @@ services:
     environment:
       - DOCKER_ENV=1
       - SERVICE_NAME=friend-group
+      - TZ=Asia/Shanghai
     restart: unless-stopped
     shm_size: "512m"
 
@@ -30,6 +31,7 @@ services:
     environment:
       - DOCKER_ENV=1
       - SERVICE_NAME=reply
+      - TZ=Asia/Shanghai
     restart: unless-stopped
     shm_size: "512m"
 
@@ -47,6 +49,7 @@ services:
     environment:
       - DOCKER_ENV=1
       - SERVICE_NAME=chaohua
+      - TZ=Asia/Shanghai
     restart: unless-stopped
     shm_size: "512m"
 
@@ -64,4 +67,5 @@ services:
     environment:
       - DOCKER_ENV=1
       - SERVICE_NAME=timeline
+      - TZ=Asia/Shanghai
     restart: unless-stopped
