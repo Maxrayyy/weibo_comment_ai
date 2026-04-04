@@ -136,9 +136,10 @@ class ReplyBot:
         comment_text = comment["comment_text"]
         comment_user = comment["comment_user_name"]
         reply_comment_text = comment.get("reply_comment_text")
+        root_comment_id = comment.get("root_comment_id")
 
-        if reply_comment_text:
-            logger.info(f"回复楼中楼 @{comment_user} (cid={cid}): {comment_text[:60]}")
+        if root_comment_id:
+            logger.info(f"回复楼中楼 @{comment_user} (cid={cid}, root={root_comment_id}): {comment_text[:60]}")
         else:
             logger.info(f"回复评论 @{comment_user} (cid={cid}): {comment_text[:60]}")
 

@@ -353,14 +353,25 @@ def _extract_comment_from_card(card):
         if time_link:
             comment["created_at"] = time_link.get_text(strip=True)
             href = time_link.get("href", "")
-            # 提取 cid 参数作为评论ID
+            # 提取 cid 参数（根评论ID）
             cid_match = re.search(r"cid=(\d+)", href)
-            comment["comment_id"] = cid_match.group(1) if cid_match else ""
+            root_cid = cid_match.group(1) if cid_match else ""
+            # 提取 rid 参数（楼中楼回复的具体评论ID）
+            rid_match = re.search(r"rid=(\d+)", href)
+            if rid_match:
+                # 楼中楼：rid 是这条回复评论的ID，cid 是根评论ID
+                comment["comment_id"] = rid_match.group(1)
+                comment["root_comment_id"] = root_cid
+            else:
+                # 直接评论：cid 就是这条评论的ID
+                comment["comment_id"] = root_cid
+                comment["root_comment_id"] = None
             # 提取微博路径中的bid -> mid
             bid_match = re.search(r"weibo\.com/\d+/(\w+)", href)
             if bid_match:
                 comment["weibo_mid"] = bid_to_mid(bid_match.group(1))
     comment.setdefault("comment_id", "")
+    comment.setdefault("root_comment_id", None)
     comment.setdefault("created_at", "")
     comment.setdefault("weibo_mid", "")
 
