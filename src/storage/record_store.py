@@ -52,13 +52,36 @@ class RecordStore:
             return dict(self._DEFAULT_RECORDS)
 
     def _save(self):
-        """保存记录到文件"""
+        """保存记录到文件（先合并磁盘上其他容器的变更，避免覆盖）"""
         os.makedirs(os.path.dirname(RECORD_PATH), exist_ok=True)
+        # 读取磁盘最新数据并合并
+        if os.path.exists(RECORD_PATH):
+            try:
+                with open(RECORD_PATH, "r", encoding="utf-8") as f:
+                    disk_data = json.load(f)
+                # 合并 dict 类型字段（commented, replied, daily_counts 等）
+                for key in self._records:
+                    if isinstance(self._records[key], dict) and isinstance(disk_data.get(key), dict):
+                        merged = dict(disk_data[key])
+                        merged.update(self._records[key])
+                        self._records[key] = merged
+                    elif isinstance(self._records[key], list) and isinstance(disk_data.get(key), list):
+                        # 列表取并集（如 chaohua_signed）
+                        for item in disk_data[key]:
+                            if item not in self._records[key]:
+                                self._records[key].append(item)
+            except (json.JSONDecodeError, Exception):
+                pass
         with open(RECORD_PATH, "w", encoding="utf-8") as f:
             json.dump(self._records, f, ensure_ascii=False, indent=2)
 
+    def _reload(self):
+        """从磁盘重新加载记录（获取其他容器的最新变更）"""
+        self._records = self._load()
+
     def is_commented(self, mid):
         """检查某条微博是否已评论"""
+        self._reload()
         return str(mid) in self._records["commented"]
 
     def add_record(self, mid, comment_text, user_name="", comment_id=None):
@@ -134,6 +157,7 @@ class RecordStore:
     # --- 回复评论记录 ---
     def is_replied(self, comment_id):
         """检查某条评论是否已回复"""
+        self._reload()
         return str(comment_id) in self._records.get("replied", {})
 
     def add_reply_record(self, comment_id, reply_text, weibo_mid, comment_user, reply_cid=None):
