@@ -40,7 +40,7 @@
 ## 部署环境
 
 - **生产服务器**：Ubuntu @ 150.158.112.53，SSH密钥 `C:\Users\zhidong_huang\weibo_douzi.pem`
-- **部署方式**：Docker Compose，4个服务独立容器（friend-group、reply、chaohua、timeline）
+- **部署方式**：Docker Compose，3个服务独立容器（friend-group、reply、chaohua），timeline已停用
 - **本地开发**：Windows 11，代码兼容 Windows/Linux 双平台运行
 
 ## 项目结构

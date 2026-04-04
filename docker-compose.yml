@@ -53,19 +53,19 @@ services:
     restart: unless-stopped
     shm_size: "512m"
 
-  # 时间线评论（纯API，无Selenium）
-  weibo-timeline:
-    build: .
-    container_name: weibo-timeline
-    command: python main.py
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config
-      - ./logs:/app/logs
-    env_file:
-      - .env
-    environment:
-      - DOCKER_ENV=1
-      - SERVICE_NAME=timeline
-      - TZ=Asia/Shanghai
-    restart: unless-stopped
+  # 时间线评论（纯API，已停用 — API配额有限，改用好友圈Selenium模式）
+  # weibo-timeline:
+  #   build: .
+  #   container_name: weibo-timeline
+  #   command: python main.py
+  #   volumes:
+  #     - ./data:/app/data
+  #     - ./config:/app/config
+  #     - ./logs:/app/logs
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     - DOCKER_ENV=1
+  #     - SERVICE_NAME=timeline
+  #     - TZ=Asia/Shanghai
+  #   restart: unless-stopped
