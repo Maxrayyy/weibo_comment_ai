@@ -196,16 +196,20 @@ class WeiboScraper:
         """
         url = f"https://www.weibo.com/mygroups?gid={gid}"
         logger.info(f"正在抓取好友圈 (gid={gid})...")
+
+        # 清除缓存，确保获取最新内容
+        try:
+            self.driver.execute_cdp_cmd("Network.clearBrowserCache", {})
+        except Exception:
+            pass
+
         if not self._safe_get(url):
             return []
 
-        # 等待SPA页面渲染
-        try:
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "article"))
-            )
-        except Exception:
-            logger.warning("好友圈页面加载超时，尝试继续解析...")
+        # 强制刷新页面，避免SPA服务端渲染缓存
+        self.driver.refresh()
+        # 等待足够时间让 Vue 应用激活并通过 API 加载最新 feed
+        time.sleep(8)
 
         # 滚动加载更多内容
         for i in range(scroll_times):
