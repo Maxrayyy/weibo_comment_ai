@@ -45,7 +45,9 @@ class RecordStore:
             # 确保所有key都存在（兼容旧数据）
             for key, default in self._DEFAULT_RECORDS.items():
                 data.setdefault(key, default)
-            logger.info(f"已加载 {len(data.get('commented', {}))} 条评论记录")
+            if not hasattr(self, '_loaded_once'):
+                logger.info(f"已加载 {len(data.get('commented', {}))} 条评论记录")
+                self._loaded_once = True
             return data
         except Exception as e:
             logger.error(f"加载评论记录失败: {e}")
