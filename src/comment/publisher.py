@@ -1,16 +1,15 @@
 """
 微博评论发布模块
 
-通过微博官方API发布评论。
+通过Selenium浏览器执行AJAX请求发布评论，使用Cookie认证，不消耗OAuth API配额。
 """
 
-import requests
-from urllib.parse import quote
+import json
 
-from src.auth.oauth_manager import get_valid_token
 from src.utils.logger import logger
 
-COMMENT_CREATE_URL = "https://api.weibo.com/2/comments/create.json"
+
+COMMENT_CREATE_URL = "https://www.weibo.com/ajax/comments/create"
 
 
 class RateLimitError(Exception):
@@ -18,62 +17,88 @@ class RateLimitError(Exception):
     pass
 
 
-def publish_comment(weibo_mid, comment_text, rip):
+def publish_comment(driver, weibo_mid, comment_text):
     """
-    通过微博API发布评论。
+    通过微博网页AJAX接口发布评论。
 
     参数：
+        driver: Selenium WebDriver 实例（需已登录微博）
         weibo_mid: 微博ID
         comment_text: 评论内容
-        rip: 用户真实有效ip
 
     返回：
         成功返回API响应dict，失败返回None
     raises：
         RateLimitError: 触发频率限制时抛出，由上层决定是否停止
     """
-    access_token = get_valid_token()
-    if not access_token:
-        logger.error("无法获取有效的access_token，评论发布失败")
-        return None
-
-    data = {
-        "access_token": access_token,
-        "id": weibo_mid,
-        "comment": comment_text,
-        "rip": rip
-    }
-
     try:
-        resp = requests.post(COMMENT_CREATE_URL, data=data, timeout=15)
-        result = resp.json()
+        # 对评论内容进行JS转义（防止引号和换行破坏JS字符串）
+        safe_comment = _js_escape(comment_text)
+        safe_mid = _js_escape(str(weibo_mid))
 
-        if "id" in result:
-            logger.info(f"评论发布成功！微博ID: {weibo_mid}, 评论ID: {result['id']}")
-            return result
+        result = driver.execute_script(f"""
+            try {{
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '{COMMENT_CREATE_URL}', false);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                // 从Cookie中读取XSRF-TOKEN
+                var xsrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+                if (xsrf) {{
+                    xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(xsrf[1]));
+                }}
+                var params = 'id={safe_mid}&comment=' + encodeURIComponent('{safe_comment}');
+                xhr.send(params);
+                return JSON.stringify({{status: xhr.status, body: xhr.responseText}});
+            }} catch(e) {{
+                return JSON.stringify({{status: 0, body: e.message}});
+            }}
+        """)
+
+        if not result:
+            logger.error("评论发布失败：浏览器未返回结果")
+            return None
+
+        resp = json.loads(result)
+        status = resp.get("status", 0)
+        body_text = resp.get("body", "")
+
+        if status == 200:
+            try:
+                body = json.loads(body_text)
+            except json.JSONDecodeError:
+                logger.error(f"评论发布响应解析失败: {body_text[:200]}")
+                return None
+
+            if "id" in body:
+                logger.info(f"评论发布成功！微博ID: {weibo_mid}, 评论ID: {body['id']}")
+                return body
+            else:
+                error_code = body.get("error_code", body.get("errno", "未知"))
+                error_msg = body.get("error", body.get("msg", "未知错误"))
+                logger.error(f"评论发布失败 - 错误码: {error_code}, 信息: {error_msg}")
+                return None
+        elif status == 403:
+            logger.warning("评论发布被拒绝(403)，可能触发频率限制")
+            raise RateLimitError("评论频率限制: HTTP 403")
+        elif status == 414:
+            logger.warning("评论发布触发频率限制(414)")
+            raise RateLimitError("评论频率限制: HTTP 414")
         else:
-            error_code = result.get("error_code", "未知")
-            error_msg = result.get("error", "未知错误")
-            logger.error(f"评论发布失败 - 错误码: {error_code}, 信息: {error_msg}")
-
-            if error_code in (10023, 10024):
-                logger.warning("触发频率限制，停止本轮评论，等待下一轮")
-                raise RateLimitError(f"评论频率限制: {error_msg}")
-            elif error_code == 10014:
-                logger.warning("评论内容不合规")
-            elif error_code in (21327, 21332):
-                logger.warning("access_token无效或已过期")
-
+            logger.error(f"评论发布HTTP错误: {status}, 响应: {body_text[:200]}")
             return None
 
     except RateLimitError:
         raise
-    except requests.Timeout:
-        logger.error(f"评论发布超时，微博ID: {weibo_mid}")
-        return None
-    except requests.ConnectionError:
-        logger.error(f"评论发布网络连接失败，微博ID: {weibo_mid}")
-        return None
     except Exception as e:
         logger.error(f"评论发布异常: {e}")
         return None
+
+
+def _js_escape(text):
+    """转义文本用于嵌入JS字符串（单引号包裹）"""
+    return (text
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r"))

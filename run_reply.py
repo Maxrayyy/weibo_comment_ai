@@ -21,7 +21,6 @@ os.environ["WDM_SSL_VERIFY"] = "0"
 
 from src.utils.logger import logger
 from src.utils.config_loader import config
-from src.utils.rip_provider import get_rip
 from src.auth.login_manager import get_valid_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
 from src.scraper.weibo_scraper import WeiboScraper
@@ -40,7 +39,6 @@ class ReplyBot:
 
     def __init__(self):
         self.my_uid = None
-        self.rip = None
         self.scraper = None
         self._rate_limit_until = None
 
@@ -49,12 +47,6 @@ class ReplyBot:
         logger.info("=" * 50)
         logger.info("微博自动回复评论 — 回复模式")
         logger.info("=" * 50)
-
-        self.rip = get_rip()
-        if not self.rip:
-            logger.error("无法获取公网IP，程序退出")
-            sys.exit(1)
-        logger.info(f"公网IP: {self.rip}")
 
         cookies = get_valid_cookies()
         if not cookies:
@@ -159,8 +151,8 @@ class ReplyBot:
         logger.info(f"  等待 {delay}s → {reply_text}")
         time.sleep(delay)
 
-        # 发送回复
-        result = send_reply(weibo_mid, cid, reply_text, self.rip)
+        # 发送回复（通过浏览器AJAX，不消耗OAuth API配额）
+        result = send_reply(self.scraper.driver, weibo_mid, cid, reply_text)
         if result:
             record_store.add_reply_record(
                 comment_id=cid,

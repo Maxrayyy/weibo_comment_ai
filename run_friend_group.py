@@ -20,7 +20,6 @@ os.environ["WDM_SSL_VERIFY"] = "0"
 
 from src.utils.logger import logger
 from src.utils.config_loader import config
-from src.utils.rip_provider import get_rip
 from src.auth.login_manager import get_valid_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
 from src.scraper.weibo_scraper import WeiboScraper
@@ -38,7 +37,6 @@ class FriendGroupBot:
 
     def __init__(self):
         self.my_uid = None
-        self.rip = None
         self.scraper = None
         self._rate_limit_until = None
 
@@ -47,12 +45,6 @@ class FriendGroupBot:
         logger.info("=" * 50)
         logger.info("微博自动评论 — 好友圈模式")
         logger.info("=" * 50)
-
-        self.rip = get_rip()
-        if not self.rip:
-            logger.error("无法获取公网IP，程序退出")
-            sys.exit(1)
-        logger.info(f"公网IP: {self.rip}")
 
         cookies = get_valid_cookies()
         if not cookies:
@@ -148,7 +140,7 @@ class FriendGroupBot:
         logger.info(f"  等待 {delay}s → {comment}")
         time.sleep(delay)
 
-        result = publish_comment(mid, comment, self.rip)
+        result = publish_comment(self.scraper.driver, mid, comment)
         if result:
             record_store.add_record(mid, comment, user_name, comment_id=result.get("id"))
             logger.info(f"  ✓ 评论成功")

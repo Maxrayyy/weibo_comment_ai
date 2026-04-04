@@ -2,7 +2,7 @@
 超话评论模块
 
 抓取超话帖子并自动生成AI评论。
-使用PC Cookie方案 + OAuth评论API。
+使用PC Cookie方案 + 网页AJAX评论接口。
 """
 
 import random
@@ -19,9 +19,9 @@ from src.utils.logger import logger
 class ChaohuaCommenter:
     """超话评论器"""
 
-    def __init__(self, client: ChaohuaClient, rip: str):
+    def __init__(self, client: ChaohuaClient, driver=None):
         self.client = client
-        self.rip = rip
+        self.driver = driver
         self.comment_config = config.chaohua_comment_config
 
     def comment_on_topics(self):
@@ -77,7 +77,7 @@ class ChaohuaCommenter:
                 time.sleep(delay)
 
                 try:
-                    result = publish_comment(mid, comment, self.rip)
+                    result = publish_comment(self.driver, mid, comment)
                 except RateLimitError:
                     logger.warning("[超话] 触发频率限制，本轮停止，等待下一轮")
                     return total_success

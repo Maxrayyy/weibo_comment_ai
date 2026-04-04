@@ -1,76 +1,97 @@
 """
 回复评论发送模块
 
-通过微博API回复指定评论。
+通过Selenium浏览器执行AJAX请求回复评论，使用Cookie认证，不消耗OAuth API配额。
 """
 
-import requests
+import json
 
-from src.auth.oauth_manager import get_valid_token
 from src.comment.publisher import RateLimitError
 from src.utils.logger import logger
 
-COMMENT_REPLY_URL = "https://api.weibo.com/2/comments/reply.json"
+COMMENT_REPLY_URL = "https://www.weibo.com/ajax/comments/reply"
 
 
-def send_reply(weibo_mid, comment_id, reply_text, rip):
+def send_reply(driver, weibo_mid, comment_id, reply_text):
     """
-    回复指定评论。
+    通过微博网页AJAX接口回复指定评论。
 
     参数：
+        driver: Selenium WebDriver 实例（需已登录微博）
         weibo_mid: 微博ID
         comment_id: 要回复的评论ID
         reply_text: 回复内容
-        rip: 用户真实IP
 
     返回：
         成功返回API响应dict，失败返回None
     """
-    access_token = get_valid_token()
-    if not access_token:
-        logger.error("无法获取有效的access_token，回复发送失败")
-        return None
-
-    data = {
-        "access_token": access_token,
-        "id": weibo_mid,
-        "cid": comment_id,
-        "comment": reply_text,
-        "without_mention": 0,
-        "comment_ori": 0,
-        "rip": rip,
-    }
-
     try:
-        resp = requests.post(COMMENT_REPLY_URL, data=data, timeout=15)
-        result = resp.json()
+        safe_comment = _js_escape(reply_text)
+        safe_mid = _js_escape(str(weibo_mid))
+        safe_cid = _js_escape(str(comment_id))
 
-        if "id" in result:
-            logger.info(f"回复发送成功！评论ID: {comment_id}, 回复ID: {result['id']}")
-            return result
+        result = driver.execute_script(f"""
+            try {{
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '{COMMENT_REPLY_URL}', false);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                var xsrf = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+                if (xsrf) {{
+                    xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(xsrf[1]));
+                }}
+                var params = 'id={safe_mid}&cid={safe_cid}&reply_id={safe_cid}&comment=' + encodeURIComponent('{safe_comment}');
+                xhr.send(params);
+                return JSON.stringify({{status: xhr.status, body: xhr.responseText}});
+            }} catch(e) {{
+                return JSON.stringify({{status: 0, body: e.message}});
+            }}
+        """)
+
+        if not result:
+            logger.error("回复发送失败：浏览器未返回结果")
+            return None
+
+        resp = json.loads(result)
+        status = resp.get("status", 0)
+        body_text = resp.get("body", "")
+
+        if status == 200:
+            try:
+                body = json.loads(body_text)
+            except json.JSONDecodeError:
+                logger.error(f"回复响应解析失败: {body_text[:200]}")
+                return None
+
+            if "id" in body:
+                logger.info(f"回复发送成功！评论ID: {comment_id}, 回复ID: {body['id']}")
+                return body
+            else:
+                error_code = body.get("error_code", body.get("errno", "未知"))
+                error_msg = body.get("error", body.get("msg", "未知错误"))
+                logger.error(f"回复发送失败 - 错误码: {error_code}, 信息: {error_msg}")
+                return None
+        elif status == 403:
+            logger.warning("回复发送被拒绝(403)，可能触发频率限制")
+            raise RateLimitError("回复频率限制: HTTP 403")
+        elif status == 414:
+            logger.warning("回复发送触发频率限制(414)")
+            raise RateLimitError("回复频率限制: HTTP 414")
         else:
-            error_code = result.get("error_code", "未知")
-            error_msg = result.get("error", "未知错误")
-            logger.error(f"回复发送失败 - 错误码: {error_code}, 信息: {error_msg}")
-
-            if error_code in (10023, 10024):
-                logger.warning("触发频率限制，停止本轮回复，等待下一轮")
-                raise RateLimitError(f"回复频率限制: {error_msg}")
-            elif error_code == 10014:
-                logger.warning("回复内容不合规")
-            elif error_code in (21327, 21332):
-                logger.warning("access_token无效或已过期")
-
+            logger.error(f"回复发送HTTP错误: {status}, 响应: {body_text[:200]}")
             return None
 
     except RateLimitError:
         raise
-    except requests.Timeout:
-        logger.error(f"回复发送超时，评论ID: {comment_id}")
-        return None
-    except requests.ConnectionError:
-        logger.error(f"回复发送网络连接失败，评论ID: {comment_id}")
-        return None
     except Exception as e:
         logger.error(f"回复发送异常: {e}")
         return None
+
+
+def _js_escape(text):
+    """转义文本用于嵌入JS字符串（单引号包裹）"""
+    return (text
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r"))

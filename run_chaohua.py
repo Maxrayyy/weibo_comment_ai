@@ -21,7 +21,6 @@ os.environ["WDM_SSL_VERIFY"] = "0"
 
 from src.utils.logger import logger
 from src.utils.config_loader import config
-from src.utils.rip_provider import get_rip
 from src.auth.login_manager import get_valid_cookies, load_cookies
 from src.auth.oauth_manager import get_valid_token, get_uid
 from src.scraper.weibo_scraper import WeiboScraper
@@ -37,7 +36,6 @@ class ChaohuaBot:
 
     def __init__(self):
         self.my_uid = None
-        self.rip = None
         self.scraper = None
         self.client = None
         self.signer = None
@@ -49,13 +47,6 @@ class ChaohuaBot:
         logger.info("=" * 50)
         logger.info("微博自动超话 — PC Cookie方案")
         logger.info("=" * 50)
-
-        # 公网IP
-        self.rip = get_rip()
-        if not self.rip:
-            logger.error("无法获取公网IP，程序退出")
-            sys.exit(1)
-        logger.info(f"公网IP: {self.rip}")
 
         # Cookie验证
         cookies = get_valid_cookies()
@@ -88,7 +79,7 @@ class ChaohuaBot:
         # 初始化各功能模块
         self.signer = ChaohuaSigner(self.client)
         self.poster = ChaohuaPoster(self.client)
-        self.commenter = ChaohuaCommenter(self.client, self.rip)
+        self.commenter = ChaohuaCommenter(self.client, driver=self.scraper.driver)
 
         # 打印配置
         sign_cfg = config.chaohua_sign_config
