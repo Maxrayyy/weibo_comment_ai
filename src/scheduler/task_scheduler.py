@@ -52,20 +52,23 @@ class TaskScheduler:
             return True
         return False
 
-    def _schedule_next(self, task_name="default"):
-        """安排下一次任务执行"""
+    def _schedule_next(self, task_name="default", delay_override=None):
+        """安排下一次任务执行。delay_override: 指定等待秒数（如频率限制冷却），跳过随机间隔"""
         if not self._running:
             return
 
-        if task_name == "default":
+        if delay_override and delay_override > 0:
+            delay = delay_override
+        elif task_name == "default":
             poll_min = self._poll_min or config.poll_min
             poll_max = self._poll_max or config.poll_max
+            delay = random.randint(poll_min, poll_max)
         else:
             task_info = self._interval_tasks.get(task_name, {})
             poll_min = task_info.get("poll_min", config.poll_min)
             poll_max = task_info.get("poll_max", config.poll_max)
+            delay = random.randint(poll_min, poll_max)
 
-        delay = random.randint(poll_min, poll_max)
         next_time = datetime.fromtimestamp(time.time() + delay)
         logger.info(f"[{task_name}] 下一次轮询将在 {delay} 秒后 ({next_time.strftime('%H:%M:%S')}) 执行")
 
@@ -87,15 +90,16 @@ class TaskScheduler:
             self._schedule_next()
             return
 
+        suggested_delay = None
         try:
             logger.info("=" * 40)
             logger.info("开始执行轮询任务...")
-            self.task_func()
+            suggested_delay = self.task_func()
             logger.info("轮询任务执行完成")
         except Exception as e:
             logger.error(f"轮询任务执行失败: {e}")
         finally:
-            self._schedule_next()
+            self._schedule_next(delay_override=suggested_delay)
 
     def add_interval_task(self, name, func, poll_min, poll_max):
         """

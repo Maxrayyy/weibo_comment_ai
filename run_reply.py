@@ -82,10 +82,11 @@ class ReplyBot:
         logger.info("=" * 50)
 
     def poll_and_reply(self):
-        """一次轮询：获取新评论 → 过滤 → 回复"""
+        """一次轮询：获取新评论 → 过滤 → 回复。返回建议等待秒数（None表示正常间隔）"""
         if self._rate_limit_until and datetime.now() < self._rate_limit_until:
-            logger.info(f"[回复] 频率限制冷却中，{self._rate_limit_until.strftime('%H:%M:%S')} 后恢复")
-            return
+            remaining = int((self._rate_limit_until - datetime.now()).total_seconds()) + 1
+            logger.info(f"[回复] 频率限制冷却中，{self._rate_limit_until.strftime('%H:%M:%S')} 后恢复，跳过本次轮询")
+            return remaining
         try:
             comments = fetch_comments_to_me(driver=self.scraper.driver)
 
@@ -121,7 +122,7 @@ class ReplyBot:
                 except RateLimitError:
                     self._rate_limit_until = datetime.now() + timedelta(minutes=self.RATE_LIMIT_COOLDOWN_MINUTES)
                     logger.warning(f"[回复] 触发频率限制，冷却 {self.RATE_LIMIT_COOLDOWN_MINUTES} 分钟")
-                    break
+                    return self.RATE_LIMIT_COOLDOWN_MINUTES * 60
                 except Exception as e:
                     logger.error(f"回复出错 (cid={c['comment_id']}): {e}")
 
