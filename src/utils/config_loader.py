@@ -32,7 +32,10 @@ class Config:
     """全局配置管理，加载 config.yaml 和 prompts.yaml"""
 
     def __init__(self):
-        self._config = _load_yaml("config.yaml")
+        # 优先加载 config.prod.yaml（生产环境），不存在则回退到 config.yaml
+        prod_path = os.path.join(CONFIG_DIR, "config.prod.yaml")
+        config_file = "config.prod.yaml" if os.path.exists(prod_path) else "config.yaml"
+        self._config = _load_yaml(config_file)
         self._prompts = _load_yaml("prompts.yaml")
 
     # --- 微博配置 ---

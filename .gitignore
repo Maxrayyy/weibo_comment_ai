@@ -3,6 +3,7 @@ venv/
 __pycache__/
 *.pyc
 .env
+config/config.prod.yaml
 logs/
 data/cookies.json
 data/oauth_token.json
