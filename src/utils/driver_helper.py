@@ -18,16 +18,17 @@ IS_DOCKER = os.environ.get("DOCKER_ENV") == "1"
 
 
 def get_chrome_service():
-    """获取 ChromeDriver Service，自动适配 Docker/本地环境"""
+    """获取 ChromeDriver Service，自动适配 Docker/Linux/Windows 环境"""
     if IS_DOCKER:
         return Service("/usr/bin/chromedriver")
 
-    # 本地环境：优先检测系统已有的 chromedriver
-    system_path = shutil.which("chromedriver")
-    if system_path:
-        return Service(system_path)
+    if not IS_WINDOWS:
+        # Linux 本地：优先使用系统已安装的 chromedriver
+        system_path = shutil.which("chromedriver")
+        if system_path:
+            return Service(system_path)
 
-    # 回退到 webdriver-manager 自动下载
+    # Windows 或 Linux 无系统 chromedriver：用 webdriver-manager 自动匹配版本
     from webdriver_manager.chrome import ChromeDriverManager
     return Service(ChromeDriverManager().install())
 

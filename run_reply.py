@@ -26,7 +26,7 @@ from src.auth.oauth_manager import get_valid_token, get_uid
 from src.scraper.weibo_scraper import WeiboScraper
 from src.reply.reply_fetcher import fetch_comments_to_me
 from src.reply.reply_generator import generate_reply
-from src.reply.reply_sender import send_reply
+from src.reply.reply_sender import send_reply, send_reply_via_ui
 from src.comment.publisher import RateLimitError
 from src.storage.record_store import record_store
 from src.scheduler.task_scheduler import TaskScheduler
@@ -172,11 +172,12 @@ class ReplyBot:
                 return
             time.sleep(1)
 
-        # 发送回复（通过浏览器AJAX，不消耗OAuth API配额）
-        result = send_reply(
-            self.scraper.driver, weibo_mid, cid, reply_text,
-            root_comment_id=root_comment_id,
-            reply_user_name=comment_user if root_comment_id else None,
+        # 发送回复（通过UI模拟方式，确保回复位置正确）
+        result = send_reply_via_ui(
+            self.scraper.driver,
+            comment_user_name=comment_user,
+            comment_text_snippet=comment_text[:30],
+            reply_text=reply_text,
         )
         if result:
             record_store.add_reply_record(
