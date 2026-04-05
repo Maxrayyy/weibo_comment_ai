@@ -14,8 +14,6 @@ from urllib.parse import urlparse, parse_qs
 
 import requests
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 
 from src.utils.config_loader import config
 from src.utils.logger import logger
@@ -70,10 +68,8 @@ def _get_authorization_code():
         f"&response_type=code"
     )
 
-    options = Options()
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    from src.utils.driver_helper import get_chrome_service
+    from src.utils.driver_helper import get_chrome_service, get_chrome_options
+    options = get_chrome_options(headless=False)
     service = get_chrome_service()
     driver = webdriver.Chrome(service=service, options=options)
 

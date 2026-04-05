@@ -8,8 +8,6 @@ import time
 import os
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -29,21 +27,8 @@ class WeiboScraper:
 
     def start(self):
         """启动浏览器并加载Cookie"""
-        options = Options()
-        options.add_argument("--headless=new")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_argument("--window-size=1920,1080")
-        import platform
-        if platform.system() == "Linux":
-            ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-        else:
-            ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-        options.add_argument(f"--user-agent={ua}")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
-        from src.utils.driver_helper import get_chrome_service
+        from src.utils.driver_helper import get_chrome_service, get_chrome_options
+        options = get_chrome_options(headless=True)
         service = get_chrome_service()
         self.driver = webdriver.Chrome(service=service, options=options)
         # 更全面的反检测注入

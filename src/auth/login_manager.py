@@ -12,8 +12,6 @@ import os
 import time
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 
 from src.utils.logger import logger
 
@@ -28,15 +26,8 @@ WEIBO_HOME_URL = "https://weibo.com"
 
 def _create_driver(headless=False):
     """创建Chrome浏览器实例"""
-    options = Options()
-    if headless:
-        options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    from src.utils.driver_helper import get_chrome_service
+    from src.utils.driver_helper import get_chrome_service, get_chrome_options
+    options = get_chrome_options(headless=headless)
     service = get_chrome_service()
     driver = webdriver.Chrome(service=service, options=options)
     # 移除webdriver特征
