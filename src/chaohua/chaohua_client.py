@@ -111,23 +111,6 @@ class ChaohuaClient:
             self.driver.get(topic_url)
             time.sleep(3)
 
-            # 检查是否已签到（页面元素分析）
-            page_source = self.driver.page_source
-            if "已签到" in page_source:
-                logger.info(f"超话 {containerid} 今日已签到")
-                return None  # 已签到
-
-            # 通过页面中的action-data提取签到API参数
-            # 签到按钮格式: action-data="api=http://i.huati.weibo.com/aj/super/checkin&...&id=containerid"
-            checkin_match = re.search(
-                r'action-data="[^"]*api=http://i\.huati\.weibo\.com/aj/super/checkin[^"]*id=([^&"]+)',
-                page_source,
-            )
-
-            if not checkin_match:
-                # 尝试直接用containerid签到
-                logger.info(f"未找到签到按钮，尝试直接签到")
-
             # 通过Selenium的fetch发起签到请求（保持cookie上下文）
             result = self.driver.execute_script(f"""
                 try {{
@@ -147,7 +130,7 @@ class ChaohuaClient:
             """)
 
             if result:
-                logger.debug(f"签到响应: {result[:200]}")
+                logger.info(f"签到API响应: {result[:200]}")
                 if '"code":100000' in result or "已签到" in result or "签到成功" in result:
                     return True
                 if "已签" in result:
