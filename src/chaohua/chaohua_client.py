@@ -21,7 +21,6 @@ from src.utils.logger import logger
 TOPIC_LIST_URL = "https://weibo.com/ajax/profile/topicContent"
 
 # huati.weibo.cn 接口
-CHECKIN_URL = "http://i.huati.weibo.com/aj/super/checkin"
 SEND_CONTENT_URL = "http://i.huati.weibo.com/pcpage/operation/publisher/sendcontent"
 
 
@@ -96,7 +95,14 @@ class ChaohuaClient:
     def sign_in(self, containerid):
         """
         对单个超话执行签到。
-        通过Selenium在超话页面上下文中调用签到API。
+        通过Selenium点击页面上的签到按钮实现。
+
+        按钮结构:
+            <a action-type="widget_take"
+               action-data="api=...checkin&status=0&id=containerid">
+                <span>签到</span>
+            </a>
+        status=0 未签到, status=1 已签到
 
         参数:
             containerid: 超话containerid
@@ -109,51 +115,57 @@ class ChaohuaClient:
         try:
             topic_url = f"https://weibo.com/p/{containerid}/super_index"
             self.driver.get(topic_url)
+            time.sleep(4)
+
+            # 定位签到按钮: action-type="widget_take" 且 action-data 包含 checkin
+            from selenium.webdriver.common.by import By
+            buttons = self.driver.find_elements(
+                By.CSS_SELECTOR, 'a[action-type="widget_take"]'
+            )
+
+            sign_btn = None
+            for btn in buttons:
+                action_data = btn.get_attribute("action-data") or ""
+                if "checkin" in action_data:
+                    sign_btn = btn
+                    break
+
+            if not sign_btn:
+                logger.warning(f"超话 {containerid} 未找到签到按钮")
+                return False
+
+            # 检查 action-data 中的 status 字段
+            action_data = sign_btn.get_attribute("action-data") or ""
+            btn_text = sign_btn.text.strip()
+            logger.info(f"签到按钮状态: text='{btn_text}', action-data='{action_data[:150]}'")
+
+            if "status=1" in action_data:
+                logger.info(f"超话 {containerid} 今日已签到（按钮status=1）")
+                return None
+
+            # 点击签到按钮
+            sign_btn.click()
             time.sleep(3)
 
-            # 通过Selenium的fetch发起签到请求（保持cookie上下文）
-            result = self.driver.execute_script(f"""
-                try {{
-                    const formData = new URLSearchParams();
-                    formData.append('id', '{containerid}');
-                    const resp = await fetch('{CHECKIN_URL}', {{
-                        method: 'POST',
-                        credentials: 'include',
-                        headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
-                        body: formData.toString()
-                    }});
-                    const text = await resp.text();
-                    return text;
-                }} catch(e) {{
-                    return JSON.stringify({{error: e.message}});
-                }}
-            """)
+            # 验证签到结果：重新获取按钮状态
+            buttons_after = self.driver.find_elements(
+                By.CSS_SELECTOR, 'a[action-type="widget_take"]'
+            )
+            for btn in buttons_after:
+                action_data_after = btn.get_attribute("action-data") or ""
+                if "checkin" in action_data_after:
+                    btn_text_after = btn.text.strip()
+                    logger.info(f"签到后按钮状态: text='{btn_text_after}', action-data='{action_data_after[:150]}'")
+                    if "status=1" in action_data_after or "已签到" in btn_text_after:
+                        return True
+                    break
 
-            if result:
-                logger.info(f"签到API响应: {result[:200]}")
-                if '"code":100000' in result or "已签到" in result or "签到成功" in result:
-                    return True
-                if "已签" in result:
-                    return None
+            # 备选验证：检查页面是否出现签到成功提示
+            page_source = self.driver.page_source
+            if "签到成功" in page_source:
+                return True
 
-            # 备选：尝试用requests直接调用（cookie带.weibo.com域名可能对huati子域名有效）
-            try:
-                resp = self.session.post(
-                    CHECKIN_URL,
-                    data={"id": containerid},
-                    headers={"Referer": topic_url},
-                    timeout=15,
-                )
-                resp_data = resp.json()
-                logger.debug(f"requests签到响应: {resp_data}")
-                if resp_data.get("code") == 100000:
-                    return True
-                if "已签" in str(resp_data):
-                    return None
-            except Exception as e:
-                logger.debug(f"requests签到失败: {e}")
-
-            logger.warning(f"超话 {containerid} 签到结果不确定: {result[:100] if result else 'empty'}")
+            logger.warning(f"超话 {containerid} 签到结果不确定")
             return False
 
         except Exception as e:
