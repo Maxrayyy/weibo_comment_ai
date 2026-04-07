@@ -1,4 +1,5 @@
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "logs")
@@ -27,8 +28,10 @@ def setup_logger(name="weibo_comment_ai", level=logging.INFO):
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 文件输出
-    file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    # 文件输出（单文件最大10MB，保留3个备份，共约40MB）
+    file_handler = RotatingFileHandler(
+        LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8"
+    )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

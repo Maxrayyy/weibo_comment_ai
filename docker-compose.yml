@@ -16,6 +16,11 @@ services:
       - TZ=Asia/Shanghai
     restart: unless-stopped
     shm_size: "512m"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # 自动回复评论（Selenium抓取）
   weibo-reply:
@@ -35,6 +40,11 @@ services:
       - TZ=Asia/Shanghai
     restart: unless-stopped
     shm_size: "512m"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # 超话签到/发帖/评论（Selenium + API）
   weibo-chaohua:
@@ -53,6 +63,11 @@ services:
       - TZ=Asia/Shanghai
     restart: unless-stopped
     shm_size: "512m"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # 时间线评论（纯API，已停用 — API配额有限，改用好友圈Selenium模式）
   # weibo-timeline:
