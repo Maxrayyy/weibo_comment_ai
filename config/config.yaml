@@ -72,16 +72,12 @@ reply:
 # 告警通知配置
 notify:
   enabled: true
-  # Server酱（微信推送），从 sct.ftqq.com 免费获取 SendKey
-  serverchan:
-    send_key: "${SERVERCHAN_SEND_KEY}"
-  # 备选：邮件通知（Server酱未配置时使用）
-  # email:
-  #   smtp_host: "smtp.qq.com"
-  #   smtp_port: 465
-  #   sender: "xxx@qq.com"
-  #   password: "授权码"
-  #   receiver: "xxx@qq.com"
+  email:
+    smtp_host: "smtp.163.com"
+    smtp_port: 465
+    sender: "hzd16992004@163.com"
+    password: "${NOTIFY_EMAIL_PASSWORD}"    # 163邮箱SMTP授权码（非登录密码）
+    receiver: "hzd16992004@163.com"
 
 # 超话功能配置（基于PC Cookie，无需手机抓包）
 chaohua:
