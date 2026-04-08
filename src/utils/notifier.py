@@ -1,24 +1,16 @@
 """
-告警通知模块
-
-支持两种通知渠道：
-1. Server酱（微信推送）— 配置 notify.serverchan.send_key
-2. 邮件（SMTP）— 配置 notify.email.*
+告警通知模块（邮件）
 
 配置示例（config.yaml）:
     notify:
       enabled: true
-      serverchan:
-        send_key: "SCT..."    # Server酱 SendKey，从 sct.ftqq.com 获取
       email:
-        smtp_host: "smtp.qq.com"
+        smtp_host: "smtp.163.com"
         smtp_port: 465
-        sender: "xxx@qq.com"
-        password: "授权码"
-        receiver: "xxx@qq.com"
+        sender: "xxx@163.com"
+        password: "SMTP授权码"
+        receiver: "xxx@163.com"
 """
-
-import requests
 
 from src.utils.logger import logger
 from src.utils.config_loader import config
@@ -30,7 +22,7 @@ def _get_notify_config():
 
 def send_notification(title, content=""):
     """
-    发送告警通知。优先Server酱，其次邮件。
+    发送邮件告警通知。
     title: 通知标题
     content: 通知详情（可选）
     """
@@ -38,39 +30,13 @@ def send_notification(title, content=""):
     if not cfg.get("enabled"):
         return
 
-    sent = False
+    email_cfg = cfg.get("email", {})
+    if not email_cfg.get("smtp_host"):
+        logger.warning(f"告警通知未配置邮箱: {title}")
+        return
 
-    # 尝试 Server酱
-    sc_cfg = cfg.get("serverchan", {})
-    send_key = sc_cfg.get("send_key")
-    if send_key:
-        sent = _send_serverchan(send_key, title, content)
-
-    # 尝试邮件
-    if not sent:
-        email_cfg = cfg.get("email", {})
-        if email_cfg.get("smtp_host"):
-            sent = _send_email(email_cfg, title, content)
-
-    if not sent:
+    if not _send_email(email_cfg, title, content):
         logger.warning(f"告警通知发送失败: {title}")
-
-
-def _send_serverchan(send_key, title, content):
-    """通过Server酱发送微信推送"""
-    try:
-        url = f"https://sctapi.ftqq.com/{send_key}.send"
-        resp = requests.post(url, data={"title": title, "desp": content}, timeout=10)
-        data = resp.json()
-        if data.get("code") == 0:
-            logger.info(f"Server酱通知发送成功: {title}")
-            return True
-        else:
-            logger.warning(f"Server酱通知失败: {data}")
-            return False
-    except Exception as e:
-        logger.warning(f"Server酱通知异常: {e}")
-        return False
 
 
 def _send_email(email_cfg, title, content):

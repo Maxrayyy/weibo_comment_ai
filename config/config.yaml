@@ -71,7 +71,7 @@ reply:
 
 # 健康检查与告警配置
 health:
-  max_consecutive_failures: 10    # 连续失败N次后自动停止服务
+  max_consecutive_failures: 6     # 连续失败N次后自动停止服务
   cookie_check_hours: 6           # Cookie有效性检查间隔（小时）
 
 # 告警通知配置
