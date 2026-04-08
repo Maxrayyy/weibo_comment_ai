@@ -190,13 +190,16 @@ class WeiboScraper:
 
         # 方案一：AJAX API 直接调用
         weibos = self._fetch_group_via_api(gid)
+        if weibos is None:
+            # 浏览器session异常，不回退到HTML（会解析到错误内容）
+            return []
         if weibos:
             logger.info(f"好友圈API抓取到 {len(weibos)} 条微博")
             for w in weibos:
                 logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
             return weibos
 
-        # 方案二：回退到HTML解析
+        # 方案二：回退到HTML解析（仅API返回空数据时，非session异常）
         logger.warning("API调用失败，回退到HTML解析模式")
         return self._fetch_group_via_html(gid, scroll_times)
 
@@ -227,6 +230,10 @@ class WeiboScraper:
 
             if not result or result.startswith("ERROR:"):
                 logger.warning(f"好友圈API请求失败: {result}")
+                # 如果是XMLHttpRequest发送失败，说明浏览器session已坏，不应回退到HTML解析
+                if result and "Failed to execute" in result:
+                    logger.error("浏览器session异常，XMLHttpRequest无法发送，跳过本次轮询")
+                    return None  # 返回None而非空列表，区别于"无数据"
                 return []
 
             import json

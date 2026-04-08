@@ -88,6 +88,11 @@ class ChaohuaClient:
             logger.info(f"获取到 {len(topics)} 个关注超话")
             return topics
 
+        except ValueError as e:
+            # JSON解析失败，打印实际响应内容帮助排查（可能是Cookie过期返回HTML）
+            logger.error(f"获取超话列表JSON解析失败: {e}")
+            logger.error(f"响应内容前200字符: {resp.text[:200]}")
+            return []
         except Exception as e:
             logger.error(f"获取超话列表异常: {e}")
             return []
