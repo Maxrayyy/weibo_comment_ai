@@ -85,6 +85,41 @@ def verify_login(driver):
     return True
 
 
+def check_cookies_valid_via_api(cookies=None):
+    """
+    通过requests请求首页检查Cookie是否有效（不需要Selenium，不影响主浏览器）。
+    返回: True(有效) / False(过期)
+    """
+    if cookies is None:
+        cookies = load_cookies()
+    if not cookies:
+        return False
+
+    import requests
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+    })
+    for c in cookies:
+        session.cookies.set(
+            c["name"], c["value"],
+            domain=c.get("domain", ".weibo.com"),
+            path=c.get("path", "/"),
+        )
+
+    try:
+        resp = session.get("https://weibo.com/", timeout=15)
+        # 已登录：页面包含"我的首页"；未登录：重定向到passport或显示"立即登录"
+        if "我的首页" in resp.text:
+            return True
+        if "passport" in resp.url or "立即登录" in resp.text:
+            return False
+        # 不确定时保守认为有效
+        return True
+    except Exception:
+        return False
+
+
 def manual_login():
     """
     启动浏览器让用户手动登录微博。

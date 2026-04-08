@@ -197,6 +197,20 @@ class TaskScheduler:
         )
         logger.info(f"已注册每日定时任务 [{name}]，执行时间: {schedule_time}")
 
+    def _check_cookie_health(self):
+        """定期检查Cookie有效性，失效时发送告警"""
+        from src.auth.login_manager import check_cookies_valid_via_api
+        logger.info("定期Cookie健康检查...")
+        if check_cookies_valid_via_api():
+            logger.info("Cookie健康检查通过 ✓")
+        else:
+            msg = f"[{self._service_name}] Cookie已过期或无效"
+            logger.error(msg)
+            send_notification(
+                f"微博Bot Cookie过期: {self._service_name}",
+                f"{msg}\n\n请尽快运行 refresh_cookies.py 刷新Cookie并重启服务",
+            )
+
     def start(self):
         """启动调度器"""
         logger.info("调度器启动，立即执行主任务...")
@@ -214,6 +228,16 @@ class TaskScheduler:
                 trigger=DateTrigger(run_date=next_time),
                 id=f"first_{name}",
             )
+
+        # 每2小时检查一次Cookie有效性
+        from apscheduler.triggers.interval import IntervalTrigger
+        self.scheduler.add_job(
+            self._check_cookie_health,
+            trigger=IntervalTrigger(hours=2),
+            id="cookie_health_check",
+            replace_existing=True,
+        )
+        logger.info("已注册Cookie健康检查（每2小时）")
 
         try:
             self.scheduler.start()
