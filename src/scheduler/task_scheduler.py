@@ -22,9 +22,6 @@ from src.storage.record_store import record_store
 class TaskScheduler:
     """多任务调度器"""
 
-    # 默认连续失败上限
-    DEFAULT_MAX_CONSECUTIVE_FAILURES = 10
-
     def __init__(self, task_func, poll_min=None, poll_max=None,
                  check_work_hours=True, check_daily_limit=True,
                  max_consecutive_failures=None, service_name="unknown"):
@@ -47,8 +44,10 @@ class TaskScheduler:
         self._check_daily_limit = check_daily_limit
         self._interval_tasks = {}  # name -> {func, poll_min, poll_max}
         self._consecutive_failures = 0
+        health_cfg = config._config.get("health", {})
         self._max_consecutive_failures = (
-            max_consecutive_failures or self.DEFAULT_MAX_CONSECUTIVE_FAILURES
+            max_consecutive_failures
+            or health_cfg.get("max_consecutive_failures", 10)
         )
         self._service_name = service_name
 
@@ -229,15 +228,17 @@ class TaskScheduler:
                 id=f"first_{name}",
             )
 
-        # 每2小时检查一次Cookie有效性
+        # 定期检查Cookie有效性
         from apscheduler.triggers.interval import IntervalTrigger
+        health_cfg = config._config.get("health", {})
+        cookie_check_hours = health_cfg.get("cookie_check_hours", 6)
         self.scheduler.add_job(
             self._check_cookie_health,
-            trigger=IntervalTrigger(hours=2),
+            trigger=IntervalTrigger(hours=cookie_check_hours),
             id="cookie_health_check",
             replace_existing=True,
         )
-        logger.info("已注册Cookie健康检查（每2小时）")
+        logger.info(f"已注册Cookie健康检查（每{cookie_check_hours}小时）")
 
         try:
             self.scheduler.start()
