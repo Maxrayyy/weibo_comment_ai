@@ -174,6 +174,7 @@ def main():
             poll_min=config.friend_group_poll_min,
             poll_max=config.friend_group_poll_max,
             check_work_hours=False,
+            service_name="好友圈",
         )
         scheduler.start()
     except KeyboardInterrupt:

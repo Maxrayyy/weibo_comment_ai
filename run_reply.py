@@ -217,6 +217,7 @@ def main():
             poll_min=config.reply_poll_min,
             poll_max=config.reply_poll_max,
             check_daily_limit=False,
+            service_name="回复",
         )
         scheduler.start()
     except KeyboardInterrupt:

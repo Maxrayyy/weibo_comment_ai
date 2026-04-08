@@ -150,6 +150,7 @@ def main():
                 bot.do_comment,
                 poll_min=comment_cfg.get("poll_min", 120),
                 poll_max=comment_cfg.get("poll_max", 300),
+                service_name="超话",
             )
         else:
             # 没有评论任务时，用签到作为主任务（只执行一次后等待）
@@ -157,6 +158,7 @@ def main():
                 bot.do_sign,
                 poll_min=3600,
                 poll_max=7200,
+                service_name="超话",
             )
 
         # 添加每日签到定时任务

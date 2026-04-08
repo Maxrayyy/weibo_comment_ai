@@ -15,6 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from src.utils.config_loader import config
 from src.utils.logger import logger
+from src.utils.notifier import send_notification
 from src.storage.record_store import record_store
 
 
@@ -26,7 +27,7 @@ class TaskScheduler:
 
     def __init__(self, task_func, poll_min=None, poll_max=None,
                  check_work_hours=True, check_daily_limit=True,
-                 max_consecutive_failures=None):
+                 max_consecutive_failures=None, service_name="unknown"):
         """
         参数：
             task_func: 每次轮询要执行的任务函数（无参数）
@@ -35,6 +36,7 @@ class TaskScheduler:
             check_work_hours: 是否检查工作时段，False则全天运行
             check_daily_limit: 是否检查每日评论上限，回复模式等自行管理上限的场景可关闭
             max_consecutive_failures: 连续失败N次后自动停止，None使用默认值
+            service_name: 服务名称，用于告警通知
         """
         self.scheduler = BlockingScheduler()
         self.task_func = task_func
@@ -48,6 +50,7 @@ class TaskScheduler:
         self._max_consecutive_failures = (
             max_consecutive_failures or self.DEFAULT_MAX_CONSECUTIVE_FAILURES
         )
+        self._service_name = service_name
 
     def _is_work_hours(self):
         """检查当前是否在工作时段内"""
@@ -112,8 +115,11 @@ class TaskScheduler:
                     f"任务报告系统性故障，连续失败 {self._consecutive_failures}/{self._max_consecutive_failures}"
                 )
                 if self._consecutive_failures >= self._max_consecutive_failures:
-                    logger.error(
-                        f"连续失败已达 {self._max_consecutive_failures} 次，自动停止服务"
+                    msg = f"[{self._service_name}] 连续失败已达 {self._max_consecutive_failures} 次，自动停止服务"
+                    logger.error(msg)
+                    send_notification(
+                        f"微博Bot服务停止: {self._service_name}",
+                        f"{msg}\n\n可能原因：Cookie过期或网络异常\n请刷新Cookie后重启服务",
                     )
                     self.stop()
                     return
@@ -129,8 +135,11 @@ class TaskScheduler:
                 f"轮询任务执行失败: {e}（连续失败 {self._consecutive_failures}/{self._max_consecutive_failures}）"
             )
             if self._consecutive_failures >= self._max_consecutive_failures:
-                logger.error(
-                    f"连续失败已达 {self._max_consecutive_failures} 次，自动停止服务"
+                msg = f"[{self._service_name}] 连续失败已达 {self._max_consecutive_failures} 次，自动停止服务"
+                logger.error(msg)
+                send_notification(
+                    f"微博Bot服务停止: {self._service_name}",
+                    f"{msg}\n\n异常信息：{e}\n请检查日志后重启服务",
                 )
                 self.stop()
                 return
