@@ -103,11 +103,16 @@ class ChaohuaBot:
             logger.error(f"签到任务异常: {e}")
 
     def do_comment(self):
-        """执行评论任务"""
+        """执行评论任务。返回False表示系统性故障"""
         try:
+            topics = self.client.get_followed_chaohua()
+            if topics is None or (isinstance(topics, list) and len(topics) == 0):
+                # 获取超话列表失败（可能Cookie过期），报告为系统性故障
+                return False
             self.commenter.comment_on_topics()
         except Exception as e:
             logger.error(f"评论任务异常: {e}")
+            return False
 
     def do_post(self):
         """执行发帖任务"""

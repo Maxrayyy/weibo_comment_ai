@@ -137,6 +137,7 @@ class ReplyBot:
 
         except Exception as e:
             logger.error(f"轮询异常: {e}")
+            return False
 
     def _reply_to_comment(self, comment):
         """回复单条评论"""

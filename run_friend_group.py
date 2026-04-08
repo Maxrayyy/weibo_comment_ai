@@ -74,7 +74,7 @@ class FriendGroupBot:
         logger.info("=" * 50)
 
     def poll_and_comment(self):
-        """一次轮询：Selenium抓取好友圈 → 过滤 → 评论"""
+        """一次轮询：Selenium抓取好友圈 → 过滤 → 评论。返回False表示系统性故障"""
         # 频率限制冷却检查
         if self._rate_limit_until and datetime.now() < self._rate_limit_until:
             logger.info(f"[好友圈] 频率限制冷却中，{self._rate_limit_until.strftime('%H:%M:%S')} 后恢复")
@@ -84,7 +84,9 @@ class FriendGroupBot:
             scroll_times = config.friend_group_scroll_times
             weibos = self.scraper.fetch_group_timeline(gid, scroll_times)
 
-            if not weibos:
+            if weibos is None or (isinstance(weibos, list) and len(weibos) == 0):
+                # 区分：空列表可能是正常无新微博，也可能是抓取失败
+                # fetch_group_timeline 在 session 异常时返回空列表（API返回None已被处理为[]）
                 logger.info("[好友圈] 没有新微博")
                 return
 
@@ -123,6 +125,7 @@ class FriendGroupBot:
 
         except Exception as e:
             logger.error(f"[好友圈] 轮询异常: {e}")
+            return False
 
     def _comment_on_weibo(self, weibo):
         mid = weibo["mid"]

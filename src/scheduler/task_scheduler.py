@@ -21,14 +21,20 @@ from src.storage.record_store import record_store
 class TaskScheduler:
     """多任务调度器"""
 
+    # 默认连续失败上限
+    DEFAULT_MAX_CONSECUTIVE_FAILURES = 10
+
     def __init__(self, task_func, poll_min=None, poll_max=None,
-                 check_work_hours=True, check_daily_limit=True):
+                 check_work_hours=True, check_daily_limit=True,
+                 max_consecutive_failures=None):
         """
         参数：
             task_func: 每次轮询要执行的任务函数（无参数）
+                       返回 False 表示系统性故障（如session失效），其他返回值视为正常
             poll_min/poll_max: 自定义主任务轮询间隔，None则使用config默认值
             check_work_hours: 是否检查工作时段，False则全天运行
             check_daily_limit: 是否检查每日评论上限，回复模式等自行管理上限的场景可关闭
+            max_consecutive_failures: 连续失败N次后自动停止，None使用默认值
         """
         self.scheduler = BlockingScheduler()
         self.task_func = task_func
@@ -38,6 +44,10 @@ class TaskScheduler:
         self._check_work_hours = check_work_hours
         self._check_daily_limit = check_daily_limit
         self._interval_tasks = {}  # name -> {func, poll_min, poll_max}
+        self._consecutive_failures = 0
+        self._max_consecutive_failures = (
+            max_consecutive_failures or self.DEFAULT_MAX_CONSECUTIVE_FAILURES
+        )
 
     def _is_work_hours(self):
         """检查当前是否在工作时段内"""
@@ -94,12 +104,39 @@ class TaskScheduler:
         try:
             logger.info("=" * 40)
             logger.info("开始执行轮询任务...")
-            suggested_delay = self.task_func()
+            result = self.task_func()
+            if result is False:
+                # 任务函数明确报告系统性故障
+                self._consecutive_failures += 1
+                logger.warning(
+                    f"任务报告系统性故障，连续失败 {self._consecutive_failures}/{self._max_consecutive_failures}"
+                )
+                if self._consecutive_failures >= self._max_consecutive_failures:
+                    logger.error(
+                        f"连续失败已达 {self._max_consecutive_failures} 次，自动停止服务"
+                    )
+                    self.stop()
+                    return
+            else:
+                if self._consecutive_failures > 0:
+                    logger.info(f"任务恢复正常，重置连续失败计数（之前连续失败{self._consecutive_failures}次）")
+                self._consecutive_failures = 0
+                suggested_delay = result
             logger.info("轮询任务执行完成")
         except Exception as e:
-            logger.error(f"轮询任务执行失败: {e}")
+            self._consecutive_failures += 1
+            logger.error(
+                f"轮询任务执行失败: {e}（连续失败 {self._consecutive_failures}/{self._max_consecutive_failures}）"
+            )
+            if self._consecutive_failures >= self._max_consecutive_failures:
+                logger.error(
+                    f"连续失败已达 {self._max_consecutive_failures} 次，自动停止服务"
+                )
+                self.stop()
+                return
         finally:
-            self._schedule_next(delay_override=suggested_delay)
+            if self._running:
+                self._schedule_next(delay_override=suggested_delay)
 
     def add_interval_task(self, name, func, poll_min, poll_max):
         """
