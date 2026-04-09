@@ -72,6 +72,13 @@ class ChaohuaCommenter:
 
             logger.info(f"[超话] {len(new_weibos)} 条待评论")
 
+            # 抓帖在 weibo.com/p/ 域下，评论接口在 www.weibo.com
+            # 统一跳转一次，避免每条评论都检查跳转
+            current_url = self.driver.current_url or ""
+            if "://www.weibo.com" not in current_url:
+                self.driver.get("https://www.weibo.com")
+                time.sleep(3)
+
             for weibo in new_weibos:
                 if record_store.get_chaohua_comment_today_count() >= daily_limit:
                     logger.info("[超话] 已达今日上限")
