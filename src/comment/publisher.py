@@ -5,6 +5,7 @@
 """
 
 import json
+import time
 
 from src.utils.logger import logger
 
@@ -32,6 +33,14 @@ def publish_comment(driver, weibo_mid, comment_text):
         RateLimitError: 触发频率限制时抛出，由上层决定是否停止
     """
     try:
+        # 确保浏览器在 www.weibo.com 域下，否则XHR会因跨域被拦截
+        # （超话等老版页面在 weibo.com 域下，与 www.weibo.com 不同源）
+        current_url = driver.current_url or ""
+        if "://www.weibo.com" not in current_url:
+            logger.info("浏览器不在www.weibo.com域下，正在跳转...")
+            driver.get("https://www.weibo.com")
+            time.sleep(3)
+
         # 对评论内容进行JS转义（防止引号和换行破坏JS字符串）
         safe_comment = _js_escape(comment_text)
         safe_mid = _js_escape(str(weibo_mid))
