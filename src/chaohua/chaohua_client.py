@@ -15,6 +15,7 @@ import random
 import requests
 from bs4 import BeautifulSoup
 
+from src.scraper.parser import _extract_first_pic
 from src.utils.logger import logger
 
 # PC端Ajax接口
@@ -250,22 +251,9 @@ class ChaohuaClient:
             # 判断是否为转发
             is_repost = bool(item.find("div", class_="WB_feed_expand"))
 
-            # 提取第一张图片URL
-            pic_url = ""
-            media_wrap = item.find("div", class_="WB_media_wrap") or item
-            img_el = media_wrap.find("img", src=re.compile(r"sinaimg\.cn"))
-            if img_el:
-                src = img_el.get("src", "")
-                if "face" not in src and "emoticon" not in src:
-                    pic_url = re.sub(
-                        r"(sinaimg\.cn/)(thumbnail|bmiddle|orj360|orj480|thumb150|square|small|mw\d+|large)",
-                        r"\1mw690",
-                        src,
-                    )
-                    if pic_url.startswith("//"):
-                        pic_url = "https:" + pic_url
-                    elif pic_url.startswith("http://"):
-                        pic_url = pic_url.replace("http://", "https://", 1)
+            # 提取第一张图片URL（优先从媒体区域提取，复用parser的头像过滤逻辑）
+            media_wrap = item.find("div", class_="WB_media_wrap")
+            pic_url = _extract_first_pic(media_wrap) if media_wrap else ""
 
             if mid and text:
                 weibos.append({
