@@ -105,5 +105,6 @@ class ChaohuaCommenter:
 
             time.sleep(random.uniform(2, 5))
 
-        logger.info(f"超话评论完成，共成功 {total_success} 条")
+        if total_success:
+            logger.info(f"[超话] 本轮评论完成，共成功 {total_success} 条")
         return total_success
