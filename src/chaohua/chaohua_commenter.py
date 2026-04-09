@@ -53,36 +53,45 @@ class ChaohuaCommenter:
             logger.info(f"正在抓取超话 {containerid} 的帖子...")
             weibos = self.client.get_topic_feed(containerid)
 
+            # 先过滤，统计待评论数（与好友圈逻辑一致）
+            new_weibos = []
             for weibo in weibos:
-                if record_store.get_chaohua_comment_today_count() >= daily_limit:
-                    break
-
                 mid = weibo.get("mid", "")
                 text = weibo.get("text", "")
                 if not mid or not text:
                     continue
-
                 if record_store.is_commented(mid):
                     continue
-
                 if config.skip_repost and weibo.get("is_repost"):
                     continue
+                new_weibos.append(weibo)
 
-                comment = generate_comment(text, pic_url=weibo.get("pic_url"))
+            if not new_weibos:
+                logger.info(f"[超话] 过滤后无新帖子")
+                continue
+
+            logger.info(f"[超话] {len(new_weibos)} 条待评论")
+
+            for weibo in new_weibos:
+                if record_store.get_chaohua_comment_today_count() >= daily_limit:
+                    logger.info("[超话] 已达今日上限")
+                    break
+
+                comment = generate_comment(weibo["text"], pic_url=weibo.get("pic_url"))
                 if not comment:
                     continue
 
                 delay = random.randint(config.comment_delay_min, config.comment_delay_max)
-                logger.info(f"等待 {delay}s 后评论超话微博 {mid}...")
+                logger.info(f"等待 {delay}s 后评论超话微博 {weibo['mid']}...")
                 time.sleep(delay)
 
                 try:
-                    result = publish_comment(self.driver, mid, comment)
+                    result = publish_comment(self.driver, weibo["mid"], comment)
                 except RateLimitError:
                     logger.warning("[超话] 触发频率限制，本轮停止，等待下一轮")
                     return total_success
                 if result:
-                    record_store.add_record(mid, comment, weibo.get("user_name", ""), comment_id=result.get("id"))
+                    record_store.add_record(weibo["mid"], comment, weibo.get("user_name", ""), comment_id=result.get("id"))
                     record_store.increment_chaohua_comment_count()
                     total_success += 1
                     logger.info(f"超话评论成功 @{weibo.get('user_name', '?')}: {comment}")
