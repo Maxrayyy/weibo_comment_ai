@@ -13,6 +13,7 @@ from src.chaohua.chaohua_client import ChaohuaClient
 from src.storage.record_store import record_store
 from src.utils.config_loader import config
 from src.utils.logger import logger
+from src.utils.notifier import send_notification
 
 
 class ChaohuaSigner:
@@ -74,4 +75,12 @@ class ChaohuaSigner:
             time.sleep(delay)
 
         logger.info(f"超话签到完成: 成功{success_count}个, 已签{already_count}个, 失败{fail_count}个")
+
+        if fail_count > 0:
+            failed_names = [t["name"] for t in topics if not record_store.is_chaohua_signed(t["name"], datetime.now().strftime("%Y-%m-%d"))]
+            send_notification(
+                f"超话签到失败 {fail_count}个",
+                f"失败超话: {', '.join(failed_names)}\n成功{success_count}个, 已签{already_count}个, 失败{fail_count}个"
+            )
+
         return success_count, already_count, fail_count

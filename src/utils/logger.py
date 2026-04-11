@@ -28,9 +28,9 @@ def setup_logger(name="weibo_comment_ai", level=logging.INFO):
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 文件输出（单文件最大10MB，保留3个备份，共约40MB）
+    # 文件输出（单文件最大500KB，保留2个备份，共约1.5MB）
     file_handler = RotatingFileHandler(
-        LOG_FILE, maxBytes=10 * 1024 * 1024, backupCount=3, encoding="utf-8"
+        LOG_FILE, maxBytes=500 * 1024, backupCount=2, encoding="utf-8"
     )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
