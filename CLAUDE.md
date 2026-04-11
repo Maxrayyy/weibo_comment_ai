@@ -39,7 +39,8 @@
 
 ## 部署环境
 
-- **生产服务器**：Ubuntu @ 150.158.112.53，SSH密钥 `C:\Users\zhidong_huang\weibo_douzi.pem`
+- **生产服务器**：Ubuntu @ 150.158.112.53，SSH密钥 `C:\Users\zhidong_huang\weibo_douzi.pem`，用户 `ubuntu`
+- **服务器目录**：`/home/ubuntu/code/weibo_comment_ai`，工作目录 `~` 即 `/home/ubuntu`
 - **部署方式**：Docker Compose，3个服务独立容器（friend-group、reply、chaohua），timeline已停用
 - **本地开发**：Windows 11，代码兼容 Windows/Linux 双平台运行
 

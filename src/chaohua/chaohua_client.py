@@ -149,8 +149,8 @@ class ChaohuaClient:
                 logger.info(f"超话 {containerid} 今日已签到（按钮status=1）")
                 return None
 
-            # 点击签到按钮
-            sign_btn.click()
+            # 点击签到按钮（使用JS点击，避免被浮层遮挡）
+            self.driver.execute_script("arguments[0].click();", sign_btn)
             time.sleep(3)
 
             # 验证签到结果：重新获取按钮状态
