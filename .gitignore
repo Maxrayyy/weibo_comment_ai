@@ -8,6 +8,7 @@ logs/
 data/cookies.json
 data/oauth_token.json
 data/commented_records.json
+data/emotions_cache.json
 .idea/
 .vscode/
 .claude/
