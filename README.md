@@ -28,6 +28,8 @@
 - **评论去重** — 避免重复评论和雷同内容
 - **Cookie自动管理** — 首次手动登录，之后自动维持
 - **限流检测** — 触发403/414自动冷却10分钟
+- **健康检查** — 连续失败自动停止服务，防止无效重试
+- **邮件告警** — 超话签到失败、服务异常时自动发送邮件通知
 
 ## 技术架构
 
@@ -81,7 +83,7 @@ weibo_comment_ai/
 │   ├── emotion/              # 微博表情管理
 │   ├── scheduler/            # APScheduler多任务调度
 │   ├── storage/              # 评论/回复记录存储（JSON）
-│   └── utils/                # 日志、配置加载、WebDriver管理、IP获取
+│   └── utils/                # 日志、配置加载、WebDriver管理、告警通知
 ├── data/                     # 运行时数据（Cookie、Token、记录、表情缓存）
 ├── logs/                     # 运行日志
 ├── docs/                     # 各版本设计文档
@@ -89,6 +91,7 @@ weibo_comment_ai/
 ├── run_friend_group.py       # 好友圈模式入口
 ├── run_chaohua.py            # 超话模式入口
 ├── run_reply.py              # 回复模式入口
+├── refresh_cookies.py        # Cookie刷新/重新登录工具
 ├── Dockerfile                # Docker镜像定义
 ├── docker-compose.yml        # 多服务编排（3个独立容器）
 └── requirements.txt
@@ -137,6 +140,9 @@ WEIBO_APP_SECRET=你的微博App Secret
 # AI大模型
 DEEPSEEK_API_KEY=你的DeepSeek API Key      # 纯文字评论生成
 DASHSCOPE_API_KEY=你的通义千问 API Key       # 图片微博多模态评论生成
+
+# 邮件告警（可选）
+NOTIFY_EMAIL_PASSWORD=你的SMTP授权码          # 163邮箱的SMTP授权码，非登录密码
 ```
 
 ### 微博开放平台
@@ -198,6 +204,26 @@ chaohua:
   comment:
     enabled: true
     daily_limit: 100
+
+# 健康检查与告警
+health:
+  max_consecutive_failures: 6 # 连续失败N次后自动停止服务
+  cookie_check_hours: 6       # Cookie有效性检查间隔（小时）
+
+# 邮件告警通知
+notify:
+  enabled: true
+  email:
+    smtp_host: "smtp.163.com"
+    smtp_port: 465
+    sender: "xxx@163.com"
+    password: "${NOTIFY_EMAIL_PASSWORD}"
+    receiver: "xxx@163.com"
+
+# 日志配置
+logging:
+  max_bytes: 524288           # 单文件最大 512KB
+  backup_count: 2             # 保留备份数
 ```
 
 ### 评论风格
@@ -220,9 +246,6 @@ python run_reply.py
 
 # 超话模式（签到/发帖/评论）
 python run_chaohua.py
-
-# 时间线模式（已停用，API配额有限）
-# python main.py
 ```
 
 **首次运行：**
@@ -246,19 +269,66 @@ docker compose up -d --build
 # 查看日志
 docker compose logs -f weibo-friend-group
 
+# 查看所有服务状态
+docker compose ps
+
 # 停止所有服务
 docker compose down
 ```
 
 > Docker环境无法进行手动登录，需先在本地完成登录和OAuth授权，将 `data/cookies.json` 和 `data/oauth_token.json` 挂载到容器中。
 
+### Cookie刷新
+
+Cookie过期后所有服务会失败（好友圈XMLHttpRequest异常、超话登录失败、回复加载超时），此时需要刷新Cookie。
+
+**方式一：使用刷新脚本（推荐）**
+
+在本地开发机上运行：
+
+```bash
+python refresh_cookies.py
+```
+
+脚本会打开Chrome浏览器：
+- 如果Cookie仍有效：自动刷新续期并保存
+- 如果Cookie已过期：跳转登录页，手动登录后自动保存
+
+**方式二：重新运行服务**
+
+本地直接运行任意服务入口（如 `python run_friend_group.py`），首次会弹出登录窗口。
+
+**更新到服务器：**
+
+Cookie刷新后需要上传到服务器并重启容器：
+
+```bash
+# 上传Cookie到服务器
+scp data/cookies.json ubuntu@你的服务器:/path/to/weibo_comment_ai/data/cookies.json
+
+# SSH到服务器重启容器
+ssh ubuntu@你的服务器
+cd /path/to/weibo_comment_ai
+docker compose restart
+```
+
+## 告警通知
+
+系统在以下情况会发送邮件告警：
+- 超话签到失败
+- 连续多次轮询失败（由 `health.max_consecutive_failures` 控制）
+- 浏览器session异常
+
+收到告警邮件后，通常意味着Cookie已过期，需按上述流程刷新Cookie。
+
 ## 注意事项
 
+- Cookie有效期通常为数天，过期后需通过 `refresh_cookies.py` 刷新或重新登录
 - OAuth access_token 有效期仅 **2小时**，过期后需重新授权（仅影响UID获取和表情）
-- Cookie有效期通常较长，但也可能过期需重新登录
 - 建议初期用白名单模式测试 1-2 个好友，稳定后再扩大范围
 - 合理设置每日评论上限和轮询间隔，避免触发风控
 - 回复模式通过UI模拟方式发送，支持楼中楼回复
+- Docker容器配置了 `restart: unless-stopped`，异常退出会自动重启
 
 ## 技术栈
 
