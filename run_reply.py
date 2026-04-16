@@ -37,11 +37,14 @@ class ReplyBot:
 
     RATE_LIMIT_COOLDOWN_MINUTES = 10
 
+    MAX_GENERATE_FAILURES = 3  # 同一评论生成失败超过此次数后标记为已回复，不再重试
+
     def __init__(self):
         self.my_uid = None
         self.scraper = None
         self._rate_limit_until = None
         self._shutdown = False
+        self._generate_fail_counts = {}  # comment_id -> 累计生成失败次数
 
     def init(self):
         """初始化：IP → Cookie → OAuth → Selenium"""
@@ -161,7 +164,19 @@ class ReplyBot:
             reply_comment_text=reply_comment_text,
         )
         if not reply_text:
-            logger.warning(f"回复生成失败，跳过 cid={cid}")
+            # 累计失败次数，超过阈值则标记为已回复，避免无限重试
+            self._generate_fail_counts[cid] = self._generate_fail_counts.get(cid, 0) + 1
+            if self._generate_fail_counts[cid] >= self.MAX_GENERATE_FAILURES:
+                record_store.add_reply_record(
+                    comment_id=cid,
+                    reply_text="[生成失败，已跳过]",
+                    weibo_mid=weibo_mid,
+                    comment_user=comment_user,
+                )
+                logger.warning(f"回复生成连续失败{self.MAX_GENERATE_FAILURES}次，标记 cid={cid} 为已处理，不再重试")
+                del self._generate_fail_counts[cid]
+            else:
+                logger.warning(f"回复生成失败，跳过 cid={cid}（累计失败{self._generate_fail_counts[cid]}次）")
             return
 
         # 随机延迟（支持优雅退出）
@@ -181,12 +196,13 @@ class ReplyBot:
             reply_text=reply_text,
         )
         if result:
+            reply_cid = result.get("id") if isinstance(result, dict) else None
             record_store.add_reply_record(
                 comment_id=cid,
                 reply_text=reply_text,
                 weibo_mid=weibo_mid,
                 comment_user=comment_user,
-                reply_cid=result.get("id"),
+                reply_cid=reply_cid,
             )
             logger.info(f"  ✓ 回复成功")
         else:
