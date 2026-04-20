@@ -44,6 +44,30 @@
 - **部署方式**：Docker Compose，3个服务独立容器（friend-group、reply、chaohua），timeline已停用
 - **本地开发**：Windows 11，代码兼容 Windows/Linux 双平台运行
 
+### 服务器部署步骤（修复/改动代码后必须执行）
+
+本地 `git push` 成功后，按顺序执行：
+
+1. **服务器拉取最新代码**
+   ```bash
+   ssh -i /c/Users/zhidong_huang/weibo_douzi.pem -o StrictHostKeyChecking=no ubuntu@150.158.112.53 "cd /home/ubuntu/code/weibo_comment_ai && git pull"
+   ```
+
+2. **重新构建并重启受影响的容器**（只重启改动涉及的服务，不要全量重启）
+   ```bash
+   ssh -i /c/Users/zhidong_huang/weibo_douzi.pem -o StrictHostKeyChecking=no ubuntu@150.158.112.53 "cd /home/ubuntu/code/weibo_comment_ai && docker compose up -d --build <service>"
+   ```
+   - 改动 `run_reply.py` 或 `src/reply/` → `weibo-reply`
+   - 改动 `run_friend_group.py` 或 `src/friend_group/` → `weibo-friend-group`
+   - 改动 `run_chaohua.py` 或 `src/chaohua/` → `weibo-chaohua`
+   - 改动 `src/utils/`、`src/emotion/` 等共享模块 → 全部相关服务一起重启
+
+3. **验证容器启动日志**
+   ```bash
+   ssh -i /c/Users/zhidong_huang/weibo_douzi.pem -o StrictHostKeyChecking=no ubuntu@150.158.112.53 "docker logs --tail 20 <container>"
+   ```
+   确认无启动错误，服务已进入正常轮询。
+
 ## 项目结构
 
 - 语言：Python
