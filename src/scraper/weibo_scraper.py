@@ -203,47 +203,47 @@ class WeiboScraper:
         logger.warning("API调用失败，回退到HTML解析模式")
         return self._fetch_group_via_html(gid, scroll_times)
 
-    def _fetch_group_via_api(self, gid):
-        """通过AJAX API获取好友圈微博数据"""
-        try:
-            # 确保浏览器在 www.weibo.com 域下（API在www子域，跨域XHR会被拦截）
-            self.driver.get("https://www.weibo.com")
-            time.sleep(3)
-
-            # 使用浏览器内置fetch调用API，自动携带cookie
-            api_url = f"https://www.weibo.com/ajax/feed/groupstimeline?list_id={gid}&refresh=4&fast_refresh=1&count=25"
-            result = self.driver.execute_script(f"""
-                try {{
-                    var xhr = new XMLHttpRequest();
-                    xhr.open('GET', '{api_url}', false);
-                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-                    xhr.send();
-                    if (xhr.status === 200) {{
-                        return xhr.responseText;
-                    }} else {{
-                        return 'ERROR:' + xhr.status;
-                    }}
-                }} catch(e) {{
-                    return 'ERROR:' + e.message;
-                }}
-            """)
-
-            if not result or result.startswith("ERROR:"):
-                logger.warning(f"好友圈API请求失败: {result}")
-                # 如果是XMLHttpRequest发送失败，说明浏览器session已坏，不应回退到HTML解析
-                if result and "Failed to execute" in result:
-                    logger.error("浏览器session异常，XMLHttpRequest无法发送，跳过本次轮询")
-                    return None  # 返回None而非空列表，区别于"无数据"
-                return []
-
-            import json
-            data = json.loads(result)
-            weibos = parse_group_timeline_api(data)
-            return weibos
-
-        except Exception as e:
-            logger.warning(f"好友圈API调用异常: {e}")
-            return []
+    # def _fetch_group_via_api(self, gid):
+    #     """通过AJAX API获取好友圈微博数据"""
+    #     try:
+    #         # 确保浏览器在 www.weibo.com 域下（API在www子域，跨域XHR会被拦截）
+    #         self.driver.get("https://www.weibo.com")
+    #         time.sleep(3)
+    #
+    #         # 使用浏览器内置fetch调用API，自动携带cookie
+    #         api_url = f"https://www.weibo.com/ajax/feed/groupstimeline?list_id={gid}&refresh=4&fast_refresh=1&count=25"
+    #         result = self.driver.execute_script(f"""
+    #             try {{
+    #                 var xhr = new XMLHttpRequest();
+    #                 xhr.open('GET', '{api_url}', false);
+    #                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    #                 xhr.send();
+    #                 if (xhr.status === 200) {{
+    #                     return xhr.responseText;
+    #                 }} else {{
+    #                     return 'ERROR:' + xhr.status;
+    #                 }}
+    #             }} catch(e) {{
+    #                 return 'ERROR:' + e.message;
+    #             }}
+    #         """)
+    #
+    #         if not result or result.startswith("ERROR:"):
+    #             logger.warning(f"好友圈API请求失败: {result}")
+    #             # 如果是XMLHttpRequest发送失败，说明浏览器session已坏，不应回退到HTML解析
+    #             if result and "Failed to execute" in result:
+    #                 logger.error("浏览器session异常，XMLHttpRequest无法发送，跳过本次轮询")
+    #                 return None  # 返回None而非空列表，区别于"无数据"
+    #             return []
+    #
+    #         import json
+    #         data = json.loads(result)
+    #         weibos = parse_group_timeline_api(data)
+    #         return weibos
+    #
+    #     except Exception as e:
+    #         logger.warning(f"好友圈API调用异常: {e}")
+    #         return []
 
     def _fetch_group_via_html(self, gid, scroll_times):
         """通过HTML解析获取好友圈微博（回退方案）"""
