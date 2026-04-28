@@ -15,7 +15,7 @@ from src.emotion.emotion_manager import get_emotion_prompt_text
 _recent_replies = deque(maxlen=20)
 
 
-def _build_messages(weibo_text, comment_text, reply_comment_text=None):
+def _build_messages(weibo_text, comment_text, reply_comment_text=None, last_rejected=None):
     """构建回复场景的消息列表"""
     system_prompt = config.get_prompt(config.reply_prompt_name).strip()
 
@@ -42,8 +42,15 @@ def _build_messages(weibo_text, comment_text, reply_comment_text=None):
     # 注入近期回复引导多样性
     if _recent_replies:
         recent = list(_recent_replies)[-5:]
-        avoid_text = "、".join(f'"{r[:8]}"' for r in recent)
-        user_prompt += f"\n\n注意：不要和这些已有回复雷同：{avoid_text}"
+        avoid_text = "、".join(f'"{r[:12]}"' for r in recent)
+        user_prompt += f"\n\n注意：不要和这些已有回复雷同（尤其是开头）：{avoid_text}"
+
+    # 重试时告知 AI 上次被判重的完整内容，引导其换开头换表达
+    if last_rejected:
+        user_prompt += (
+            f"\n\n你上一次生成的回复是：\"{last_rejected}\"。"
+            f"这一条与近期已发回复的开头高度重复，请换一个完全不同的开头词、句式和表达方式重新生成，不要再出现类似结构。"
+        )
 
     return [
         {"role": "system", "content": system_prompt},
@@ -52,11 +59,11 @@ def _build_messages(weibo_text, comment_text, reply_comment_text=None):
 
 
 def _is_duplicate(reply):
-    """检查回复是否与近期回复重复"""
+    """检查回复是否与近期回复重复（前12字相同即判重）"""
     for recent in _recent_replies:
         if reply == recent:
             return True
-        if len(reply) >= 8 and len(recent) >= 8 and reply[:8] == recent[:8]:
+        if len(reply) >= 12 and len(recent) >= 12 and reply[:12] == recent[:12]:
             return True
     return False
 
@@ -97,9 +104,14 @@ def generate_reply(weibo_text, comment_text, reply_comment_text=None, max_retrie
         base_url=config.text_base_url,
     )
 
+    last_rejected = None
+    last_valid_reply = None  # 合规但判重的回复，作为兜底
+
     for attempt in range(max_retries):
         try:
-            messages = _build_messages(weibo_text, comment_text, reply_comment_text)
+            messages = _build_messages(
+                weibo_text, comment_text, reply_comment_text, last_rejected=last_rejected
+            )
             response = client.chat.completions.create(
                 model=config.text_model,
                 messages=messages,
@@ -123,7 +135,9 @@ def generate_reply(weibo_text, comment_text, reply_comment_text=None, max_retrie
                 continue
 
             if _is_duplicate(reply):
-                logger.warning(f"生成的回复与近期回复重复，重试（第{attempt + 1}次）")
+                logger.warning(f"生成的回复与近期回复重复，重试（第{attempt + 1}次）: {reply}")
+                last_rejected = reply
+                last_valid_reply = reply  # 保留作为兜底
                 continue
 
             _recent_replies.append(reply)
@@ -132,6 +146,12 @@ def generate_reply(weibo_text, comment_text, reply_comment_text=None, max_retrie
 
         except Exception as e:
             logger.error(f"调用LLM API失败（第{attempt + 1}次）: {e}")
+
+    # 兜底：重试次数耗尽，但有合规但判重的回复，使用最后一条
+    if last_valid_reply:
+        logger.warning(f"回复生成重试{max_retries}次均判重，使用兜底回复: {last_valid_reply}")
+        _recent_replies.append(last_valid_reply)
+        return last_valid_reply
 
     logger.error(f"回复生成失败，已重试{max_retries}次")
     return None
