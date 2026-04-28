@@ -189,18 +189,18 @@ class WeiboScraper:
         logger.info(f"正在抓取好友圈 (gid={gid})...")
 
         # 方案一：AJAX API 直接调用
-        weibos = self._fetch_group_via_api(gid)
-        if weibos is None:
-            # 浏览器session异常，不回退到HTML（会解析到错误内容）
-            return []
-        if weibos:
-            logger.info(f"好友圈API抓取到 {len(weibos)} 条微博")
-            for w in weibos:
-                logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
-            return weibos
+        # weibos = self._fetch_group_via_api(gid)
+        # if weibos is None:
+        #     # 浏览器session异常，不回退到HTML（会解析到错误内容）
+        #     return []
+        # if weibos:
+        #     logger.info(f"好友圈API抓取到 {len(weibos)} 条微博")
+        #     for w in weibos:
+        #         logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
+        #     return weibos
 
         # 方案二：回退到HTML解析（仅API返回空数据时，非session异常）
-        logger.warning("API调用失败，回退到HTML解析模式")
+        # logger.warning("API调用失败，回退到HTML解析模式")
         return self._fetch_group_via_html(gid, scroll_times)
 
     # def _fetch_group_via_api(self, gid):
