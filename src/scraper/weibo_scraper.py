@@ -4,9 +4,12 @@ Selenium微博抓取器
 使用Cookie登录微博网页版，抓取好友最新微博和关注列表。
 """
 
+import json
+import platform
 import time
 import os
 
+import requests
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -14,7 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 import random
 
-from src.auth.login_manager import apply_cookies, load_cookies, WEIBO_HOME_URL
+from src.auth.login_manager import apply_cookies, load_cookies, WEIBO_HOME_URL, COOKIE_PATH
 from src.scraper.parser import parse_weibo_cards, parse_group_weibo_cards, parse_group_timeline_api, parse_follow_list
 from src.utils.logger import logger
 
@@ -24,6 +27,8 @@ class WeiboScraper:
 
     def __init__(self):
         self.driver = None
+        self._api_session = None
+        self._api_cookies_mtime = 0
 
     def start(self):
         """启动浏览器并加载Cookie"""
@@ -180,70 +185,127 @@ class WeiboScraper:
     def fetch_group_timeline(self, gid, scroll_times=3):
         """
         抓取好友圈分组的微博feed。
-        优先使用AJAX API直接获取JSON数据（解决长时间运行浏览器的SPA缓存问题），
-        失败时回退到HTML解析。
+        优先通过 requests 直连 AJAX API 获取实时 JSON（避开浏览器 SPA 缓存和长跑退化），
+        失败时回退到 HTML 解析。
         gid: 好友圈分组ID（URL中的gid参数）
         scroll_times: 向下滚动的次数（仅HTML回退时使用）
         返回微博列表。
         """
         logger.info(f"正在抓取好友圈 (gid={gid})...")
 
-        # 方案一：AJAX API 直接调用
-        # weibos = self._fetch_group_via_api(gid)
-        # if weibos is None:
-        #     # 浏览器session异常，不回退到HTML（会解析到错误内容）
-        #     return []
-        # if weibos:
-        #     logger.info(f"好友圈API抓取到 {len(weibos)} 条微博")
-        #     for w in weibos:
-        #         logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
-        #     return weibos
+        # 方案一：requests 直连 AJAX API
+        weibos = self._fetch_group_via_api(gid)
+        if weibos is None:
+            # cookie 过期 / 会话异常，不回退到 HTML（HTML 会解析到公共时间线而非好友圈）
+            return []
+        if weibos:
+            logger.info(f"好友圈API抓取到 {len(weibos)} 条微博")
+            for w in weibos:
+                logger.info(f"  [@{w.get('user_name', '?')}] (UID:{w.get('user_id', '?')}) {w.get('text', '')[:100]}")
+            return weibos
 
-        # 方案二：回退到HTML解析（仅API返回空数据时，非session异常）
-        # logger.warning("API调用失败，回退到HTML解析模式")
+        # 方案二：API 返回空数据（非会话异常）时，回退到 HTML 解析
+        logger.warning("API返回空数据，回退到HTML解析模式")
         return self._fetch_group_via_html(gid, scroll_times)
 
-    # def _fetch_group_via_api(self, gid):
-    #     """通过AJAX API获取好友圈微博数据"""
-    #     try:
-    #         # 确保浏览器在 www.weibo.com 域下（API在www子域，跨域XHR会被拦截）
-    #         self.driver.get("https://www.weibo.com")
-    #         time.sleep(3)
-    #
-    #         # 使用浏览器内置fetch调用API，自动携带cookie
-    #         api_url = f"https://www.weibo.com/ajax/feed/groupstimeline?list_id={gid}&refresh=4&fast_refresh=1&count=25"
-    #         result = self.driver.execute_script(f"""
-    #             try {{
-    #                 var xhr = new XMLHttpRequest();
-    #                 xhr.open('GET', '{api_url}', false);
-    #                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-    #                 xhr.send();
-    #                 if (xhr.status === 200) {{
-    #                     return xhr.responseText;
-    #                 }} else {{
-    #                     return 'ERROR:' + xhr.status;
-    #                 }}
-    #             }} catch(e) {{
-    #                 return 'ERROR:' + e.message;
-    #             }}
-    #         """)
-    #
-    #         if not result or result.startswith("ERROR:"):
-    #             logger.warning(f"好友圈API请求失败: {result}")
-    #             # 如果是XMLHttpRequest发送失败，说明浏览器session已坏，不应回退到HTML解析
-    #             if result and "Failed to execute" in result:
-    #                 logger.error("浏览器session异常，XMLHttpRequest无法发送，跳过本次轮询")
-    #                 return None  # 返回None而非空列表，区别于"无数据"
-    #             return []
-    #
-    #         import json
-    #         data = json.loads(result)
-    #         weibos = parse_group_timeline_api(data)
-    #         return weibos
-    #
-    #     except Exception as e:
-    #         logger.warning(f"好友圈API调用异常: {e}")
-    #         return []
+    def _fetch_group_via_api(self, gid):
+        """
+        通过 requests.Session 直连 AJAX API 获取好友圈微博。
+
+        不经过 Selenium，避免长时间运行后浏览器 XHR context 失效。
+        返回值：
+            list[dict]  — 成功（可能为空，表示无新微博）
+            None        — cookie 过期 / 会话异常，不应回退到 HTML
+        """
+        session = self._get_api_session()
+        if session is None:
+            return None
+
+        api_url = "https://www.weibo.com/ajax/feed/groupstimeline"
+        params = {
+            "list_id": gid,
+            "refresh": 4,
+            "fast_refresh": 1,
+            "count": 25,
+        }
+
+        try:
+            resp = session.get(api_url, params=params, timeout=15)
+        except requests.RequestException as e:
+            logger.warning(f"好友圈API网络请求失败: {e}")
+            return []
+
+        # 非 JSON 响应通常是被重定向到 passport 登录页
+        ctype = resp.headers.get("Content-Type", "")
+        if "json" not in ctype.lower():
+            logger.error(
+                f"好友圈API返回非JSON (status={resp.status_code}, content-type={ctype})，"
+                f"cookie 可能已过期，请重新运行 refresh_cookies.py"
+            )
+            # 作废当前 session，下次轮询重新从磁盘加载 cookie
+            self._api_session = None
+            return None
+
+        try:
+            data = resp.json()
+        except ValueError as e:
+            logger.warning(f"好友圈API JSON解析失败: {e}, body[:200]={resp.text[:200]}")
+            return []
+
+        if data.get("ok") != 1:
+            logger.warning(f"好友圈API返回异常: ok={data.get('ok')}, msg={data.get('msg', '')}")
+            # 业务侧拒绝通常也意味着认证状态有问题
+            if data.get("ok") == 0 and ("login" in str(data).lower() or data.get("url_objects")):
+                self._api_session = None
+                return None
+            return []
+
+        return parse_group_timeline_api(data)
+
+    def _get_api_session(self):
+        """
+        构建/复用用于 AJAX 直连的 requests.Session。
+        cookies.json 被外部刷新（mtime 变化）时自动重建。
+        """
+        try:
+            mtime = os.path.getmtime(COOKIE_PATH)
+        except OSError:
+            mtime = 0
+
+        if self._api_session is not None and mtime == self._api_cookies_mtime:
+            return self._api_session
+
+        cookies = load_cookies()
+        if not cookies:
+            logger.error("好友圈API无可用cookie，请先运行 refresh_cookies.py")
+            return None
+
+        if platform.system() == "Linux":
+            ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+        else:
+            ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": ua,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Referer": "https://www.weibo.com/",
+            "X-Requested-With": "XMLHttpRequest",
+        })
+
+        for c in cookies:
+            # 注入时尊重原始 domain/path，避免 host-only cookie 被错发到其他子域
+            session.cookies.set(
+                c["name"], c["value"],
+                domain=c.get("domain", ".weibo.com"),
+                path=c.get("path", "/"),
+            )
+
+        self._api_session = session
+        self._api_cookies_mtime = mtime
+        logger.info(f"好友圈API session 已就绪，注入 {len(cookies)} 条 cookie")
+        return session
 
     def _fetch_group_via_html(self, gid, scroll_times):
         """通过HTML解析获取好友圈微博（回退方案）"""
